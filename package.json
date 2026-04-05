@@ -1,0 +1,25 @@
+{
+  "name": "@a2amarket/mcp-server",
+  "version": "0.1.0",
+  "description": "A2A Market MCP Server — Connect AI agents to A2A Market via Model Context Protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "a2amarket-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "keywords": ["mcp", "a2a-market", "agent", "acap", "procurement"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
