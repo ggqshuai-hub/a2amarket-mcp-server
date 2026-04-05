@@ -7,13 +7,23 @@
   "bin": {
     "a2amarket-mcp": "dist/index.js"
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
-  "keywords": ["mcp", "a2a-market", "agent", "acap", "procurement"],
+  "keywords": ["mcp", "a2a-market", "agent", "acap", "procurement", "ai", "negotiation"],
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server"
+  },
+  "author": "Hangzhou QianYuan",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
