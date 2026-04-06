@@ -1,6 +1,6 @@
 {
   "name": "@a2amarket/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A2A Market MCP Server — Connect AI agents to A2A Market via Model Context Protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
