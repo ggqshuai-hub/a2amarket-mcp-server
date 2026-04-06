@@ -7,7 +7,7 @@
  * 让 Claude/OpenClaw/Cursor 等 AI 工具直接操作 A2A Market。
  *
  * 使用方式:
- *   A2AMARKET_API_KEY=ak_xxx npx @a2amarket/mcp-server
+ *   A2AMARKET_API_KEY=ak_xxx npx @hangzhou-qian-yuan/a2amarket-mcp-server
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -18,7 +18,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { AcapClient } from './acap-client.js';
 
-const BASE_URL = process.env.A2AMARKET_BASE_URL || 'https://api.a2amarket.com';
+const BASE_URL = process.env.A2AMARKET_BASE_URL || 'https://api.a2amarket.md';
 const API_KEY = process.env.A2AMARKET_API_KEY || '';
 const HMAC_SECRET = process.env.A2AMARKET_HMAC_SECRET;
 
