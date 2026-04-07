@@ -2,7 +2,7 @@
  * A2A Market ACAP API Client
  *
  * 封装所有 ACAP 端点调用，处理信封格式和 HMAC 签名。
- * v0.2.0 — 29 个 Tool 对应的完整 API 方法
+ * v0.3.0 — 31 个 Tool 对应的完整 API 方法
  */
 
 import * as crypto from 'crypto';
@@ -11,6 +11,8 @@ export interface AcapConfig {
   baseUrl: string;
   apiKey: string;
   hmacSecret?: string;
+  agentId?: string;   // 当前 Agent ID（用于信封 sender）
+  locale?: string;     // 错误信息语言 'zh' | 'en'
 }
 
 export interface AcapEnvelope<T = any> {
@@ -25,6 +27,25 @@ export interface AcapEnvelope<T = any> {
   error?: { code: string; message: string; http_status: number; retry_after?: number; details?: any };
 }
 
+/** 结构化错误，保留 ACAP 错误码和重试信息 */
+export class AcapError extends Error {
+  public httpStatus?: number;
+  public acapCode?: string;
+  public retryAfter?: number;
+  public details?: any;
+
+  constructor(message: string, opts?: { httpStatus?: number; acapCode?: string; retryAfter?: number; details?: any }) {
+    super(message);
+    this.name = 'AcapError';
+    if (opts) {
+      this.httpStatus = opts.httpStatus;
+      this.acapCode = opts.acapCode;
+      this.retryAfter = opts.retryAfter;
+      this.details = opts.details;
+    }
+  }
+}
+
 export class AcapClient {
   private config: AcapConfig;
 
@@ -32,13 +53,17 @@ export class AcapClient {
     this.config = config;
   }
 
-  /** 构建 ACAP 请求信封 */
-  private buildEnvelope(subProtocol: string, action: string, payload: any): AcapEnvelope {
+  /** 构建 ACAP 请求信封（含 sender + 幂等键关联） */
+  private buildEnvelope(subProtocol: string, action: string, payload: any, idempotencyKey?: string): AcapEnvelope {
     return {
       acap_version: '1.0',
       message_id: crypto.randomUUID(),
       sub_protocol: subProtocol,
       timestamp: new Date().toISOString(),
+      sender: this.config.agentId
+        ? { agent_id: this.config.agentId, agent_type: 'EXTERNAL', platform: 'mcp-server' }
+        : undefined,
+      auth: idempotencyKey ? { idempotency_key: idempotencyKey } : undefined,
       payload: { action, ...payload },
     };
   }
@@ -46,19 +71,22 @@ export class AcapClient {
   /** 统一 HTTP 请求 */
   private async request<T = any>(method: string, path: string, body?: any): Promise<AcapEnvelope<T>> {
     const url = `${this.config.baseUrl}${path}`;
+    const idempotencyKey = crypto.randomUUID();
+    const timestamp = new Date().toISOString();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'X-Agent-Key': this.config.apiKey,
-      'X-Idempotency-Key': crypto.randomUUID(),
+      'X-Idempotency-Key': idempotencyKey,
+      'X-ACAP-Timestamp': timestamp,
     };
 
     const bodyStr = body ? JSON.stringify(body) : undefined;
 
-    // HMAC 签名（可选）
+    // HMAC 签名：hmac-sha256:{base64}，签名范围包含 body
     if (this.config.hmacSecret && bodyStr) {
       const hmac = crypto.createHmac('sha256', this.config.hmacSecret);
       hmac.update(bodyStr);
-      headers['X-ACAP-Signature'] = hmac.digest('hex');
+      headers['X-ACAP-Signature'] = `hmac-sha256:${hmac.digest('base64')}`;
     }
 
     const controller = new AbortController();
@@ -77,11 +105,24 @@ export class AcapClient {
       try {
         result = JSON.parse(text);
       } catch {
-        throw new Error(`Server returned non-JSON response (HTTP ${resp.status}): ${text.substring(0, 200)}`);
+        throw new AcapError(
+          `Server returned non-JSON response (HTTP ${resp.status}): ${text.substring(0, 500)}`,
+          { httpStatus: resp.status }
+        );
       }
 
-      if (!resp.ok && !result.payload) {
-        throw new Error(`HTTP ${resp.status}: ${result.message || result.error?.message || text.substring(0, 200)}`);
+      // 结构化错误提取
+      if (!resp.ok) {
+        const acapErr = result.error || result;
+        throw new AcapError(
+          acapErr.message || `HTTP ${resp.status}`,
+          {
+            httpStatus: resp.status,
+            acapCode: acapErr.code,
+            retryAfter: acapErr.retry_after,
+            details: acapErr.details,
+          }
+        );
       }
 
       return result as AcapEnvelope<T>;
@@ -134,11 +175,11 @@ export class AcapClient {
   }
 
   async getSourcingStatus(intentId: number) {
-    return this.request('GET', `/api/v1/sourcing/intent/${intentId}`);
+    return this.request('GET', `/acap/v1/intents/${intentId}/sourcing`);
   }
 
   async listMatches(intentId: number) {
-    return this.request('GET', `/api/v1/match/intent/${intentId}`);
+    return this.request('GET', `/acap/v1/intents/${intentId}/matches`);
   }
 
   async listResponses(intentId: number) {
@@ -175,7 +216,7 @@ export class AcapClient {
   }
 
   async getOrderStatus(sessionId: string) {
-    return this.request('GET', `/api/v1/orders/${sessionId}`);
+    return this.request('GET', `/acap/v1/settlements/${sessionId}`);
   }
 
   // ══════════════════════════════════════════════════════════
@@ -259,7 +300,7 @@ export class AcapClient {
   }
 
   async getReputation() {
-    return this.request('GET', '/api/v1/reputation/score');
+    return this.request('GET', '/acap/v1/reputation/mine');
   }
 
   async getBalance() {
@@ -267,7 +308,7 @@ export class AcapClient {
   }
 
   async sendMessage(receiverAgentId: string, content: string, messageType?: string) {
-    const envelope = this.buildEnvelope('AMP', 'SEND_MESSAGE', {
+    const envelope = this.buildEnvelope('MSG', 'SEND_MESSAGE', {
       receiver_agent_id: receiverAgentId, content, message_type: messageType || 'text',
     });
     return this.request('POST', '/acap/v1/messages', envelope);

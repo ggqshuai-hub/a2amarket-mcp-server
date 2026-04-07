@@ -1,40 +1,95 @@
 #!/usr/bin/env node
 
 /**
- * A2A Market MCP Server v0.2.0
+ * A2A Market MCP Server v0.3.0
  *
- * 将 A2A Market 平台能力暴露为 29 个 MCP Tools，
- * 让 Claude/OpenClaw/Cursor 等 AI 工具直接操作 A2A Market。
+ * 将 A2A Market 平台能力暴露为 31 个 MCP Tools，
+ * 让 Claude/Cursor 等 AI 工具直接操作 A2A Market。
  *
  * 使用方式:
- *   A2AMARKET_API_KEY=ak_xxx npx @hangzhou-qian-yuan/a2amarket-mcp-server
+ *   A2AMARKET_API_KEY=ak_xxx npx @hz-abyssal-heart/a2amarket-mcp-server
+ *   A2AMARKET_API_KEY=ak_xxx npx @hz-abyssal-heart/a2amarket-mcp-server --sse --port 3100
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { AcapClient } from './acap-client.js';
+import { formatError, setLocale } from './errors.js';
+import { enableDebug, logDebug, logInfo, logError } from './logger.js';
+import * as S from './schemas.js';
+
+// ── CLI 参数解析 ──
+
+const argv = process.argv.slice(2);
+
+if (argv.includes('--version') || argv.includes('-v')) {
+  console.log('@hz-abyssal-heart/a2amarket-mcp-server@0.3.0');
+  process.exit(0);
+}
+
+if (argv.includes('--help') || argv.includes('-h')) {
+  console.log(`
+A2A Market MCP Server — AI Agent 交易平台 MCP 桥接
+
+Usage:
+  npx @hz-abyssal-heart/a2amarket-mcp-server [options]
+
+Options:
+  --stdio          Stdio 传输（默认）
+  --sse            SSE 传输模式（HTTP Server）
+  --port <port>    SSE 端口（默认 3100，或 A2AMARKET_MCP_PORT）
+  --debug          启用调试日志
+  --locale <lang>  错误信息语言 zh|en（默认 zh）
+  -v, --version    显示版本
+  -h, --help       显示帮助
+
+Environment:
+  A2AMARKET_API_KEY       API Key（必填）
+  A2AMARKET_BASE_URL      服务端地址（默认 https://api.a2amarket.md）
+  A2AMARKET_HMAC_SECRET   HMAC 签名密钥（可选）
+  A2AMARKET_AGENT_ID      当前 Agent ID（可选，用于信封 sender）
+  A2AMARKET_MCP_PORT      SSE 端口（默认 3100）
+  A2AMARKET_LOCALE        错误信息语言 zh|en（默认 zh）
+`);
+  process.exit(0);
+}
+
+// ── 配置 ──
+
+const DEBUG = argv.includes('--debug');
+enableDebug(DEBUG);
+
+const localeArg = argv.includes('--locale') ? argv[argv.indexOf('--locale') + 1] : undefined;
+setLocale(localeArg || process.env.A2AMARKET_LOCALE || 'zh');
 
 const BASE_URL = process.env.A2AMARKET_BASE_URL || 'https://api.a2amarket.md';
 const API_KEY = process.env.A2AMARKET_API_KEY || '';
 const HMAC_SECRET = process.env.A2AMARKET_HMAC_SECRET;
+const AGENT_ID = process.env.A2AMARKET_AGENT_ID;
 
 if (!API_KEY) {
-  console.error('Error: A2AMARKET_API_KEY environment variable is required');
+  logError('init', 'A2AMARKET_API_KEY environment variable is required');
   process.exit(1);
 }
 
-const client = new AcapClient({ baseUrl: BASE_URL, apiKey: API_KEY, hmacSecret: HMAC_SECRET });
+const client = new AcapClient({
+  baseUrl: BASE_URL, apiKey: API_KEY, hmacSecret: HMAC_SECRET, agentId: AGENT_ID,
+});
 
 const server = new Server(
-  { name: 'a2amarket', version: '0.2.0' },
+  { name: 'a2amarket', version: '0.3.0' },
   { capabilities: { tools: {} } }
 );
 
-// ── Tool 定义 ──
+logDebug('init', `baseUrl=${BASE_URL}, agentId=${AGENT_ID || '(not set)'}, hmac=${HMAC_SECRET ? 'yes' : 'no'}`);
+
+// ── Tool 定义（31 个） ──
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -187,6 +242,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'get_negotiation_rounds',
+      description: '查询议价历史轮次（每轮的报价、让步、思考过程）。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          negotiation_id: { type: 'string', description: '议价会话 ID' },
+        },
+        required: ['negotiation_id'],
+      },
+    },
+    {
       name: 'authorize_deal',
       description: '授权结算。议价达成后，确认同意该交易并进入支付流程。',
       inputSchema: {
@@ -210,7 +276,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_order_status',
-      description: '查询订单状态（支付、发货、完成等）。',
+      description: '查询订单/结算状态（支付、发货、完成等）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -235,6 +301,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           negotiation_aggression: { type: 'number', description: '议价激进度 0.0~1.0' },
           max_delivery_days: { type: 'number', description: '最大可接受交期（天）' },
           auto_authorize: { type: 'boolean', description: '是否自动授权低于阈值的交易' },
+        },
+        required: ['agent_id'],
+      },
+    },
+    {
+      name: 'get_preferences',
+      description: '查询 Agent 的采购偏好设置。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent_id: { type: 'string', description: 'Agent ID' },
         },
         required: ['agent_id'],
       },
@@ -267,15 +344,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'update_supply',
-      description: '更新已有的供给声明（部分更新，只传需要改的字段）。',
+      description: '更新已有的供给商品（部分更新，只传需要改的字段）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          declaration_id: { type: 'number', description: '声明 ID' },
+          declaration_id: { type: 'number', description: '商品 ID' },
+          title: { type: 'string', description: '新标题' },
           description: { type: 'string', description: '新描述' },
+          category_l1: { type: 'string', description: '一级品类' },
+          category_l2: { type: 'string', description: '二级品类' },
           price_min: { type: 'number', description: '新最低价格' },
           price_max: { type: 'number', description: '新最高价格' },
+          moq: { type: 'number', description: '最小起订量' },
           delivery_days: { type: 'number', description: '新交期' },
+          service_regions: { type: 'string', description: '服务区域' },
+          keywords: { type: 'string', description: '搜索关键词' },
         },
         required: ['declaration_id'],
       },
@@ -380,154 +463,171 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'get_messages',
       description: '查看收到的消息。',
-      inputSchema: { type: 'object' as const, properties: {} },
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          status: { type: 'string', description: '过滤状态（可选）' },
+        },
+      },
     },
   ],
 }));
 
-// ── Tool 处理 ──
+// ── Tool 处理（Zod 校验 + 结构化错误） ──
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  logDebug('tool', `call: ${name}`, args);
 
   try {
     let result: any;
 
     switch (name) {
       // ── 通用 — Agent 身份管理 ──
-      case 'register_agent':
+      case 'register_agent': {
+        const p = S.RegisterAgentSchema.parse(args);
         result = await client.registerAgent({
-          handle: args!.handle as string,
-          agentName: args!.agent_name as string,
-          agentType: args!.agent_type as string,
-          contactEmail: args!.contact_email as string,
-          endpointUrl: args?.endpoint_url as string | undefined,
+          handle: p.handle, agentName: p.agent_name, agentType: p.agent_type,
+          contactEmail: p.contact_email, endpointUrl: p.endpoint_url,
         });
         break;
-      case 'get_profile':
-        result = await client.getProfile(args!.agent_id as string);
+      }
+      case 'get_profile': {
+        const p = S.GetProfileSchema.parse(args);
+        result = await client.getProfile(p.agent_id);
         break;
-      case 'update_profile':
-        result = await client.updateProfile(args!.agent_id as string, {
-          agentName: args?.agent_name,
-          endpointUrl: args?.endpoint_url,
-          capabilities: args?.capabilities,
+      }
+      case 'update_profile': {
+        const p = S.UpdateProfileSchema.parse(args);
+        result = await client.updateProfile(p.agent_id, {
+          agentName: p.agent_name, endpointUrl: p.endpoint_url, capabilities: p.capabilities,
         });
         break;
-      case 'search_agents':
-        result = await client.searchAgents(args?.query as string, args?.role as string);
+      }
+      case 'search_agents': {
+        const p = S.SearchAgentsSchema.parse(args);
+        result = await client.searchAgents(p.query, p.role);
         break;
+      }
 
       // ── 买家 — 意图生命周期 ──
-      case 'publish_intent':
-        result = await client.publishIntent(
-          args!.text as string, args?.budget as number, args?.currency as string);
+      case 'publish_intent': {
+        const p = S.PublishIntentSchema.parse(args);
+        result = await client.publishIntent(p.text, p.budget, p.currency);
         break;
-      case 'get_intent_status':
-        result = await client.getIntent(args!.intent_id as number);
+      }
+      case 'get_intent_status': {
+        const p = S.IntentIdSchema.parse(args);
+        result = await client.getIntent(p.intent_id);
         break;
-      case 'cancel_intent':
-        result = await client.cancelIntent(args!.intent_id as number);
+      }
+      case 'cancel_intent': {
+        const p = S.IntentIdSchema.parse(args);
+        result = await client.cancelIntent(p.intent_id);
         break;
-      case 'get_sourcing_status':
-        result = await client.getSourcingStatus(args!.intent_id as number);
+      }
+      case 'get_sourcing_status': {
+        const p = S.IntentIdSchema.parse(args);
+        result = await client.getSourcingStatus(p.intent_id);
         break;
-      case 'list_matches':
-        result = await client.listMatches(args!.intent_id as number);
+      }
+      case 'list_matches': {
+        const p = S.IntentIdSchema.parse(args);
+        result = await client.listMatches(p.intent_id);
         break;
-      case 'list_responses':
-        result = await client.listResponses(args!.intent_id as number);
+      }
+      case 'list_responses': {
+        const p = S.IntentIdSchema.parse(args);
+        result = await client.listResponses(p.intent_id);
         break;
+      }
 
       // ── 买家 — 议价与结算 ──
-      case 'select_and_negotiate':
-        result = await client.selectAndNegotiate(args!.match_id as number, {
-          max_price: args?.max_price as number,
-          quantity: args?.quantity as number,
+      case 'select_and_negotiate': {
+        const p = S.SelectAndNegotiateSchema.parse(args);
+        result = await client.selectAndNegotiate(p.match_id, {
+          max_price: p.max_price, quantity: p.quantity,
         });
         break;
-      case 'get_negotiation_status':
-        result = await client.getNegotiationStatus(args!.negotiation_id as string);
+      }
+      case 'get_negotiation_status': {
+        const p = S.NegotiationIdSchema.parse(args);
+        result = await client.getNegotiationStatus(p.negotiation_id);
         break;
-      case 'authorize_deal':
-        result = await client.authorizeDeal(args!.negotiation_id as string);
+      }
+      case 'get_negotiation_rounds': {
+        const p = S.NegotiationIdSchema.parse(args);
+        result = await client.getNegotiationRounds(p.negotiation_id);
         break;
-      case 'reject_deal':
-        result = await client.rejectDeal(args!.negotiation_id as string);
+      }
+      case 'authorize_deal': {
+        const p = S.NegotiationIdSchema.parse(args);
+        result = await client.authorizeDeal(p.negotiation_id);
         break;
-      case 'get_order_status':
-        result = await client.getOrderStatus(args!.session_id as string);
+      }
+      case 'reject_deal': {
+        const p = S.NegotiationIdSchema.parse(args);
+        result = await client.rejectDeal(p.negotiation_id);
         break;
+      }
+      case 'get_order_status': {
+        const p = S.SessionIdSchema.parse(args);
+        result = await client.getOrderStatus(p.session_id);
+        break;
+      }
 
       // ── 买家 — 偏好 ──
       case 'set_preferences': {
-        const prefData: Record<string, any> = {};
-        for (const key of ['preferred_categories', 'preferred_regions', 'default_budget_max',
-          'quality_level', 'negotiation_aggression', 'max_delivery_days', 'auto_authorize']) {
-          if (args?.[key] !== undefined) prefData[key] = args[key];
-        }
-        result = await client.setPreferences(args!.agent_id as string, prefData);
+        const p = S.SetPreferencesSchema.parse(args);
+        const { agent_id, ...prefData } = p;
+        result = await client.setPreferences(agent_id, prefData);
+        break;
+      }
+      case 'get_preferences': {
+        const p = S.GetProfileSchema.parse(args);
+        result = await client.getPreferences(p.agent_id);
         break;
       }
 
       // ── 卖家 — 供给声明 ──
-      case 'declare_supply':
-        result = await client.declareSupply({
-          title: args!.title as string,
-          description: args?.description as string,
-          category_l1: args?.category_l1 as string,
-          category_l2: args?.category_l2 as string,
-          price: args!.price as number,
-          price_currency: args?.price_currency as string,
-          moq: args?.moq as number,
-          stock_quantity: args?.stock_quantity as number,
-          delivery_days: args?.delivery_days as number,
-          service_regions: args?.service_regions as string,
-          image_url: args?.image_url as string,
-          keywords: args?.keywords as string,
-          contact_name: args?.contact_name as string,
-          contact_phone: args?.contact_phone as string,
-        });
+      case 'declare_supply': {
+        const p = S.DeclareSupplySchema.parse(args);
+        result = await client.declareSupply(p);
         break;
+      }
       case 'update_supply': {
-        const updateData: Record<string, any> = {};
-        for (const key of ['description', 'price_min', 'price_max', 'delivery_days',
-          'category_l1', 'category_l2', 'moq', 'service_regions', 'keywords']) {
-          if (args?.[key] !== undefined) updateData[key] = args[key];
-        }
-        result = await client.updateSupply(args!.declaration_id as number, updateData);
+        const p = S.UpdateSupplySchema.parse(args);
+        const { declaration_id, ...updateData } = p;
+        result = await client.updateSupply(declaration_id, updateData);
         break;
       }
 
       // ── 卖家 — 意图订阅 ──
-      case 'subscribe_intent':
-        result = await client.subscribeIntent({
-          category_l1: args?.category_l1 as string,
-          category_l2: args?.category_l2 as string,
-          min_budget: args?.min_budget as number,
-          max_budget: args?.max_budget as number,
-          regions: args?.regions as string,
-        });
+      case 'subscribe_intent': {
+        const p = S.SubscribeIntentSchema.parse(args);
+        result = await client.subscribeIntent(p);
         break;
-      case 'unsubscribe_intent':
-        result = await client.unsubscribeIntent(args!.subscription_id as number);
+      }
+      case 'unsubscribe_intent': {
+        const p = S.UnsubscribeSchema.parse(args);
+        result = await client.unsubscribeIntent(p.subscription_id);
         break;
+      }
       case 'list_subscriptions':
         result = await client.listSubscriptions();
         break;
-      case 'get_incoming_intents':
-        result = await client.getIncomingIntents(args?.page as number, args?.page_size as number);
+      case 'get_incoming_intents': {
+        const p = S.PaginationSchema.parse(args);
+        result = await client.getIncomingIntents(p.page, p.page_size);
         break;
+      }
 
       // ── 卖家 — 托管议价策略 ──
-      case 'set_hosted_strategy':
-        result = await client.setHostedStrategy({
-          strategy_type: args!.strategy_type as string,
-          min_price: args?.min_price as number,
-          max_concession_rate: args?.max_concession_rate as number,
-          auto_accept_above: args?.auto_accept_above as number,
-        });
+      case 'set_hosted_strategy': {
+        const p = S.SetHostedStrategySchema.parse(args);
+        result = await client.setHostedStrategy(p);
         break;
+      }
 
       // ── 卖家 — 信誉 ──
       case 'get_reputation':
@@ -535,36 +635,100 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
 
       // ── 通用 — 信誉 / 算力 / 消息 ──
-      case 'check_reputation':
-        result = await client.checkReputation(args!.agent_id as string);
+      case 'check_reputation': {
+        const p = S.AgentIdSchema.parse(args);
+        result = await client.checkReputation(p.agent_id);
         break;
+      }
       case 'get_balance':
         result = await client.getBalance();
         break;
-      case 'send_message':
-        result = await client.sendMessage(
-          args!.receiver_agent_id as string, args!.content as string, args?.message_type as string);
+      case 'send_message': {
+        const p = S.SendMessageSchema.parse(args);
+        result = await client.sendMessage(p.receiver_agent_id, p.content, p.message_type);
         break;
-      case 'get_messages':
-        result = await client.getMessages();
+      }
+      case 'get_messages': {
+        const p = S.GetMessagesSchema.parse(args);
+        result = await client.getMessages(p.status);
         break;
+      }
 
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
 
+    logDebug('tool', `success: ${name}`);
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error: any) {
-    return { content: [{ type: 'text', text: `Error: ${error.message}` }], isError: true };
+    const msg = formatError(error);
+    logError('tool', `${name} failed:`, msg);
+    return { content: [{ type: 'text', text: msg }], isError: true };
   }
 });
 
-// ── 启动 ──
+// ── 启动（Stdio / SSE 双模式） ──
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error('A2A Market MCP Server v0.2.0 running on stdio (29 tools)');
+  const useSSE = argv.includes('--sse');
+
+  if (useSSE) {
+    // SSE 传输模式
+    const portArg = argv.includes('--port') ? argv[argv.indexOf('--port') + 1] : undefined;
+    const port = parseInt(portArg || process.env.A2AMARKET_MCP_PORT || '3100', 10);
+
+    const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+      // 健康检查
+      if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', version: '0.3.0', tools: 31 }));
+        return;
+      }
+
+      // CORS 预检
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Key',
+        });
+        res.end();
+        return;
+      }
+
+      // SSE 端点
+      if (req.url === '/sse' || req.url?.startsWith('/sse?')) {
+        logDebug('sse', 'new SSE connection');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        const transport = new SSEServerTransport('/messages', res);
+        await server.connect(transport);
+        return;
+      }
+
+      // SSE 消息端点
+      if (req.method === 'POST' && req.url === '/messages') {
+        // SSEServerTransport 内部处理
+        return;
+      }
+
+      res.writeHead(404);
+      res.end('Not Found');
+    });
+
+    httpServer.listen(port, () => {
+      logInfo('init', `A2A Market MCP Server v0.3.0 running on SSE (port ${port}, 31 tools)`);
+      logInfo('init', `SSE endpoint: http://localhost:${port}/sse`);
+      logInfo('init', `Health check: http://localhost:${port}/health`);
+    });
+  } else {
+    // Stdio 传输模式（默认）
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    logInfo('init', 'A2A Market MCP Server v0.3.0 running on stdio (31 tools)');
+  }
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  logError('init', 'Fatal:', err);
+  process.exit(1);
+});

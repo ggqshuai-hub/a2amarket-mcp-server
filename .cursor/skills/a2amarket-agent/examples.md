@@ -42,8 +42,17 @@ AI: 议价已开始，AI 正在代你谈判...
     ← round: 2, buyer_offer: 21000, seller_offer: 24000, status: IN_PROGRESS
 
 AI: 第 2 轮：你方出价 ¥210，卖方报价 ¥240，还在拉锯...
+    → get_negotiation_rounds(negotiation_id="NEG-abc123")
+    ← rounds: [
+         {round: 1, buyer: 19500, seller: 24500, thought: "开局低价试探"},
+         {round: 2, buyer: 21000, seller: 24000, thought: "对方让步500，跟进让步"},
+         {round: 3, buyer: 22000, seller: 23200, thought: "差距缩小，继续推进"},
+         {round: 4, buyer: 22500, seller: 22800, thought: "接近成交区间"}
+       ]
+
+AI: 议价历史：4 轮谈判，双方差距已缩小到 ¥3/箱...
     → get_negotiation_status(negotiation_id="NEG-abc123")
-    ← round: 4, buyer_offer: 22500, seller_offer: 23000, status: DEAL_REACHED
+    ← round: 4, final_price: 22800, status: DEAL_REACHED
 
 AI: 成交！最终价格 ¥228/箱，总计 ¥22,800。要确认下单吗？
 
@@ -103,10 +112,10 @@ AI: Strategy set:
     - Auto-accept if buyer offers ≥ ¥82
 ```
 
-## Example 3: Check balance and reputation
+## Example 3: Check balance, reputation, and preferences
 
 ```
-用户: 看下我的余额和信誉
+用户: 看下我的余额、信誉和偏好设置
 
 AI: → get_balance()
     ← balance: 50000, frozen: 3200, available: 46800, currency: "COMPUTE"
@@ -114,10 +123,20 @@ AI: → get_balance()
     → get_reputation()
     ← score: 87, total_transactions: 23, positive_rate: 0.96
 
+    → get_preferences(agent_id="agt_a1b2c3d4e5f6")
+    ← preferred_categories: ["食品", "电子产品"],
+       quality_level: "standard",
+       negotiation_aggression: 0.6,
+       max_delivery_days: 14
+
 AI: 你的账户状态：
     - 算力余额：50,000（冻结 3,200，可用 46,800）
     - 信誉评分：87/100
     - 历史交易：23 笔，好评率 96%
+    - 偏好品类：食品、电子产品
+    - 质量偏好：标准
+    - 议价激进度：0.6（中等）
+    - 最大交期：14 天
 ```
 
 ## Example 4: Search and message an agent
@@ -143,4 +162,27 @@ AI: Message sent to TechSource Pro. I'll check for their reply.
     ← [no new messages yet]
 
 AI: No reply yet. I can check again later if you'd like.
+```
+
+## Example 5: SSE mode setup
+
+```
+User: I want to deploy the MCP server remotely
+
+AI: You can use SSE mode for remote deployment. Start the server with:
+
+    A2AMARKET_API_KEY=ak_your_key npx @hz-abyssal-heart/a2amarket-mcp-server --sse --port 3100
+
+    Then configure your MCP client:
+
+    {
+      "mcpServers": {
+        "a2amarket": {
+          "url": "https://your-server.com/sse"
+        }
+      }
+    }
+
+    Health check: GET https://your-server.com/health
+    → {"status":"ok","version":"0.3.0","tools":31}
 ```

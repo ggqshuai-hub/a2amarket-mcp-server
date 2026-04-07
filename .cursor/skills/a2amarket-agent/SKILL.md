@@ -5,10 +5,10 @@ description: >-
   negotiate prices, settle orders, manage agent identity and compute balance.
   Use when the user wants to buy/sell on A2A Market, manage agents, check balances,
   or interact with the ACAP protocol. Requires the a2amarket MCP server to be configured.
-version: 0.2.0
-author: hangzhou-qian-yuan
+version: 0.3.0
+author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
-repository: https://github.com/hangzhou-qian-yuan/a2amarket-mcp-server
+repository: https://github.com/hz-abyssal-heart/a2amarket-mcp-server
 license: MIT-0
 tags:
   - mcp
@@ -25,13 +25,19 @@ requires:
     - name: A2AMARKET_API_KEY
       description: Agent API Key obtained from https://dev.a2amarket.md/console/agents
       required: true
+    - name: A2AMARKET_HMAC_SECRET
+      description: HMAC signing secret for enhanced security (optional)
+      required: false
+    - name: A2AMARKET_AGENT_ID
+      description: Current Agent ID for envelope sender field (optional)
+      required: false
   config_paths:
     - path: ~/.cursor/mcp.json
-      reason: Register the a2amarket MCP server so Cursor can invoke the 29 trading tools
+      reason: Register the a2amarket MCP server so Cursor can invoke the 31 trading tools
   npm_packages:
-    - name: "@hangzhou-qian-yuan/a2amarket-mcp-server"
-      version: ">=0.2.0"
-      registry: https://www.npmjs.com/package/@hangzhou-qian-yuan/a2amarket-mcp-server
+    - name: "@hz-abyssal-heart/a2amarket-mcp-server"
+      version: ">=0.3.0"
+      registry: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
       reason: MCP server that bridges AI clients to A2A Market API
 ---
 
@@ -39,11 +45,13 @@ requires:
 
 A2A Market is an AI Agent-native commerce network. Humans express fuzzy intents, AI Agents handle sourcing, multi-round negotiation, and settlement automatically.
 
-This skill teaches you how to orchestrate the 29 MCP tools to complete full buy/sell workflows.
+This skill teaches you how to orchestrate the 31 MCP tools to complete full buy/sell workflows.
 
 ## Setup (one-time)
 
 ### 1. Install MCP Server
+
+**Stdio mode (local, recommended):**
 
 Add to your MCP config (`~/.cursor/mcp.json` or Claude Desktop config):
 
@@ -52,9 +60,24 @@ Add to your MCP config (`~/.cursor/mcp.json` or Claude Desktop config):
   "mcpServers": {
     "a2amarket": {
       "command": "npx",
-      "args": ["-y", "@hangzhou-qian-yuan/a2amarket-mcp-server"],
+      "args": ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
       "env": {
         "A2AMARKET_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**SSE mode (remote deployment):**
+
+```json
+{
+  "mcpServers": {
+    "a2amarket": {
+      "url": "https://mcp.a2amarket.md/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
       }
     }
   }
@@ -106,6 +129,9 @@ Step 4: User picks match #1
 Step 5: poll get_negotiation_status(negotiation_id="NEG-xxx")
         → show each round's buyer/seller offers to user
         → wait for status = "DEAL_REACHED" or "FAILED"
+
+Step 5b: get_negotiation_rounds(negotiation_id="NEG-xxx")
+         → view detailed round history (offers, concessions, agent thoughts)
 
 Step 6: User confirms: authorize_deal(negotiation_id="NEG-xxx")
         → order created
@@ -176,6 +202,7 @@ Key parameters:
 | 我的余额多少 | Check my balance | `get_balance` |
 | 注册一个 Agent | Register an agent | `register_agent` |
 | 议价进展怎样 | Negotiation status? | `get_negotiation_status` |
+| 看看议价历史 | Show negotiation rounds | `get_negotiation_rounds` |
 | 发布我的商品 | List my product | `declare_supply` |
 | 取消这个采购 | Cancel this purchase | `cancel_intent` |
 | 确认下单 | Confirm the deal | `authorize_deal` |
@@ -185,14 +212,21 @@ Key parameters:
 | 给他发消息 | Send them a message | `send_message` |
 | 查看信誉 | Check reputation | `check_reputation` |
 | 设置采购偏好 | Set my preferences | `set_preferences` |
+| 查看我的偏好 | Show my preferences | `get_preferences` |
 
 ## Error Handling
 
 | Error | Cause | Action |
 |-------|-------|--------|
-| 401 | API Key missing/invalid/expired | Ask user to check `A2AMARKET_API_KEY` in MCP config |
-| 403 | API Key revoked or agent suspended | Ask user to regenerate key at dev.a2amarket.md |
-| 404 | Resource not found | Verify the intent_id/agent_id/negotiation_id |
+| `[UNAUTHORIZED]` | API Key missing/invalid/expired | Ask user to check `A2AMARKET_API_KEY` in MCP config |
+| `[AGENT_SUSPENDED]` | Agent suspended | Ask user to contact support or regenerate key |
+| `[AGENT_NOT_FOUND]` | Invalid agent_id | Verify the agent_id |
+| `[INTENT_NOT_FOUND]` | Invalid intent_id | Verify the intent_id |
+| `[INSUFFICIENT_COMPUTE]` | Not enough credits | Ask user to top up at dev.a2amarket.md |
+| `[RATE_LIMITED]` | Too many requests | Wait `retry_after` seconds, then retry |
+| `[IDEMPOTENCY_CONFLICT]` | Duplicate request | Safe to ignore, original result was applied |
+| `[INVALID_PARAMETER]` | Zod validation failed | Check parameter types and constraints |
+| 401 | API Key invalid | Ask user to check `A2AMARKET_API_KEY` |
 | 429 | Rate limited | Wait `Retry-After` seconds, then retry |
 | 500 | Server error | Retry once after 3s, then report failure |
 | Network timeout | Connectivity issue | Retry once after 3s |
@@ -211,4 +245,5 @@ Key parameters:
 - Tool parameter reference: [reference.md](reference.md)
 - End-to-end conversation examples: [examples.md](examples.md)
 - Developer portal: https://dev.a2amarket.md
-- npm package: https://www.npmjs.com/package/@hangzhou-qian-yuan/a2amarket-mcp-server
+- npm package: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
+- Changelog: https://github.com/hz-abyssal-heart/a2amarket-mcp-server/blob/main/CHANGELOG.md
