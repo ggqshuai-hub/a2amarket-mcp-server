@@ -155,6 +155,30 @@ export class AcapClient {
     return this.request('GET', `/acap/v1/discovery/agents${qs ? '?' + qs : ''}`);
   }
 
+  async verifyEmail(email: string, code: string) {
+    return this.request('POST', '/acap/v1/agents/verify-email', { email, code });
+  }
+
+  async checkHandle(handle: string) {
+    return this.request('GET', `/acap/v1/agents/check/${handle}`);
+  }
+
+  async getMyAgents() {
+    return this.request('GET', '/acap/v1/agents/mine');
+  }
+
+  async listApiKeys(agentId: string) {
+    return this.request('GET', `/acap/v1/agents/${agentId}/keys`);
+  }
+
+  async getUsage(agentId: string) {
+    return this.request('GET', `/acap/v1/agents/${agentId}/usage`);
+  }
+
+  async rotateApiKey(agentId: string) {
+    return this.request('POST', `/acap/v1/agents/${agentId}/rotate-key`);
+  }
+
   // ══════════════════════════════════════════════════════════
   // 买家 — 意图生命周期
   // ══════════════════════════════════════════════════════════
@@ -217,6 +241,20 @@ export class AcapClient {
     return this.request('GET', `/acap/v1/settlements/${sessionId}`);
   }
 
+  async submitOffer(sessionCode: string, price: number, message?: string) {
+    const envelope = this.buildEnvelope('ANP', 'SUBMIT_OFFER', { price, message });
+    return this.request('POST', `/acap/v1/negotiations/${sessionCode}/offers`, envelope);
+  }
+
+  async acceptDeal(sessionCode: string) {
+    return this.request('POST', `/acap/v1/negotiations/${sessionCode}/accept`);
+  }
+
+  async createSettlement(sessionCode: string) {
+    const envelope = this.buildEnvelope('ASP', 'CREATE_SETTLEMENT', { session_code: sessionCode });
+    return this.request('POST', '/acap/v1/settlements', envelope);
+  }
+
   // ══════════════════════════════════════════════════════════
   // 买家 — 偏好设置
   // ══════════════════════════════════════════════════════════
@@ -248,6 +286,22 @@ export class AcapClient {
 
   async updateSupply(id: number, data: Record<string, any>) {
     return this.request('PUT', `/acap/v1/supply-products/${id}`, data);
+  }
+
+  async listSupplyProducts() {
+    return this.request('GET', '/acap/v1/supply-products');
+  }
+
+  async getSupplyProduct(id: number) {
+    return this.request('GET', `/acap/v1/supply-products/${id}`);
+  }
+
+  async deleteSupplyProduct(id: number) {
+    return this.request('DELETE', `/acap/v1/supply-products/${id}`);
+  }
+
+  async respondToIntent(intentId: number, data: { price: number; quantity?: number; delivery_days?: number; message?: string }) {
+    return this.request('POST', `/acap/v1/intents/${intentId}/responses`, data);
   }
 
   // ══════════════════════════════════════════════════════════
@@ -292,6 +346,14 @@ export class AcapClient {
     return this.request('POST', '/acap/v1/hosted/strategies', data);
   }
 
+  async listHostedStrategies() {
+    return this.request('GET', '/acap/v1/hosted/strategies');
+  }
+
+  async deleteHostedStrategy(strategyId: number) {
+    return this.request('DELETE', `/acap/v1/hosted/strategies/${strategyId}`);
+  }
+
   // ══════════════════════════════════════════════════════════
   // 通用 — 信誉 / 算力 / 消息
   // ══════════════════════════════════════════════════════════
@@ -319,5 +381,13 @@ export class AcapClient {
   async getMessages(status?: string) {
     const params = status ? `?status=${status}` : '';
     return this.request('GET', `/acap/v1/messages${params}`);
+  }
+
+  async listConversations() {
+    return this.request('GET', '/acap/v1/messages/conversations');
+  }
+
+  async getConversation(conversationId: string) {
+    return this.request('GET', `/acap/v1/messages/conversations/${conversationId}`);
   }
 }

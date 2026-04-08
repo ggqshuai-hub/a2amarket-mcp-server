@@ -145,6 +145,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: 'verify_email',
+      description: '验证注册邮箱。注册后需要通过邮箱验证码完成验证。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          email: { type: 'string', description: '注册时使用的邮箱' },
+          code: { type: 'string', description: '邮箱验证码' },
+        },
+        required: ['email', 'code'],
+      },
+    },
+    {
+      name: 'check_handle',
+      description: '检查 Agent handle 是否可用。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          handle: { type: 'string', description: '要检查的 handle' },
+        },
+        required: ['handle'],
+      },
+    },
+    {
+      name: 'get_my_agents',
+      description: '获取当前用户拥有的所有 Agent 列表。',
+      inputSchema: { type: 'object' as const, properties: {} },
+    },
+    {
+      name: 'list_api_keys',
+      description: '查看指定 Agent 的 API Key 列表。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent_id: { type: 'string', description: 'Agent ID' },
+        },
+        required: ['agent_id'],
+      },
+    },
+    {
+      name: 'get_usage',
+      description: '查看指定 Agent 的用量统计。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent_id: { type: 'string', description: 'Agent ID' },
+        },
+        required: ['agent_id'],
+      },
+    },
+    {
+      name: 'rotate_api_key',
+      description: '轮换 Agent 的 API Key。旧 Key 立即失效。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          agent_id: { type: 'string', description: 'Agent ID' },
+        },
+        required: ['agent_id'],
+      },
+    },
 
     // ═══ 买家 — 意图生命周期 ═══
     {
@@ -285,6 +346,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['session_id'],
       },
     },
+    {
+      name: 'submit_offer',
+      description: '在议价中提交还价（手动议价模式）。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          negotiation_id: { type: 'string', description: '议价会话 ID' },
+          price: { type: 'number', description: '报价金额' },
+          message: { type: 'string', description: '附言' },
+        },
+        required: ['negotiation_id', 'price'],
+      },
+    },
+    {
+      name: 'accept_deal',
+      description: '接受当前报价，结束议价。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          negotiation_id: { type: 'string', description: '议价会话 ID' },
+        },
+        required: ['negotiation_id'],
+      },
+    },
+    {
+      name: 'create_settlement',
+      description: '创建结算单（议价达成后）。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          negotiation_id: { type: 'string', description: '议价会话 ID' },
+        },
+        required: ['negotiation_id'],
+      },
+    },
 
     // ═══ 买家 — 偏好设置 ═══
     {
@@ -364,6 +460,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['declaration_id'],
       },
     },
+    {
+      name: 'list_supply_products',
+      description: '查看自己发布的供给商品列表。',
+      inputSchema: { type: 'object' as const, properties: {} },
+    },
+    {
+      name: 'get_supply_product',
+      description: '查看供给商品详情。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          product_id: { type: 'number', description: '商品 ID' },
+        },
+        required: ['product_id'],
+      },
+    },
+    {
+      name: 'delete_supply_product',
+      description: '删除供给商品。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          product_id: { type: 'number', description: '商品 ID' },
+        },
+        required: ['product_id'],
+      },
+    },
+    {
+      name: 'respond_to_intent',
+      description: '卖家主动对买家意图报价响应。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          intent_id: { type: 'number', description: '意图 ID' },
+          price: { type: 'number', description: '报价金额' },
+          quantity: { type: 'number', description: '可供数量' },
+          delivery_days: { type: 'number', description: '交货天数' },
+          message: { type: 'string', description: '附言' },
+        },
+        required: ['intent_id', 'price'],
+      },
+    },
 
     // ═══ 卖家 — 意图订阅 ═══
     {
@@ -431,6 +569,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['category_l1'],
       },
     },
+    {
+      name: 'list_hosted_strategies',
+      description: '查看已设置的托管策略列表。',
+      inputSchema: { type: 'object' as const, properties: {} },
+    },
+    {
+      name: 'delete_hosted_strategy',
+      description: '删除托管策略。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          strategy_id: { type: 'number', description: '策略 ID' },
+        },
+        required: ['strategy_id'],
+      },
+    },
 
     // ═══ 卖家 — 信誉 ═══
     {
@@ -479,6 +633,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: 'list_conversations',
+      description: '查看消息会话列表。',
+      inputSchema: { type: 'object' as const, properties: {} },
+    },
+    {
+      name: 'get_conversation',
+      description: '查看指定会话内的消息详情。',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          conversation_id: { type: 'string', description: '会话 ID' },
+        },
+        required: ['conversation_id'],
+      },
+    },
   ],
 }));
 
@@ -516,6 +686,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'search_agents': {
         const p = S.SearchAgentsSchema.parse(args);
         result = await client.searchAgents(p.query, p.role);
+        break;
+      }
+      case 'verify_email': {
+        const { email, code } = args as { email: string; code: string };
+        result = await client.verifyEmail(email, code);
+        break;
+      }
+      case 'check_handle': {
+        const { handle } = args as { handle: string };
+        result = await client.checkHandle(handle);
+        break;
+      }
+      case 'get_my_agents': {
+        result = await client.getMyAgents();
+        break;
+      }
+      case 'list_api_keys': {
+        const { agent_id } = args as { agent_id: string };
+        result = await client.listApiKeys(agent_id);
+        break;
+      }
+      case 'get_usage': {
+        const { agent_id } = args as { agent_id: string };
+        result = await client.getUsage(agent_id);
+        break;
+      }
+      case 'rotate_api_key': {
+        const { agent_id } = args as { agent_id: string };
+        result = await client.rotateApiKey(agent_id);
         break;
       }
 
@@ -584,6 +783,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await client.getOrderStatus(p.session_id);
         break;
       }
+      case 'submit_offer': {
+        const { negotiation_id, price, message } = args as { negotiation_id: string; price: number; message?: string };
+        result = await client.submitOffer(negotiation_id, price, message);
+        break;
+      }
+      case 'accept_deal': {
+        const { negotiation_id } = args as { negotiation_id: string };
+        result = await client.acceptDeal(negotiation_id);
+        break;
+      }
+      case 'create_settlement': {
+        const { negotiation_id } = args as { negotiation_id: string };
+        result = await client.createSettlement(negotiation_id);
+        break;
+      }
 
       // ── 买家 — 偏好 ──
       case 'set_preferences': {
@@ -608,6 +822,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const p = S.UpdateSupplySchema.parse(args);
         const { declaration_id, ...updateData } = p;
         result = await client.updateSupply(declaration_id, updateData);
+        break;
+      }
+      case 'list_supply_products': {
+        result = await client.listSupplyProducts();
+        break;
+      }
+      case 'get_supply_product': {
+        const { product_id } = args as { product_id: number };
+        result = await client.getSupplyProduct(product_id);
+        break;
+      }
+      case 'delete_supply_product': {
+        const { product_id } = args as { product_id: number };
+        result = await client.deleteSupplyProduct(product_id);
+        break;
+      }
+      case 'respond_to_intent': {
+        const { intent_id, ...data } = args as { intent_id: number; price: number; quantity?: number; delivery_days?: number; message?: string };
+        result = await client.respondToIntent(intent_id, data);
         break;
       }
 
@@ -637,6 +870,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await client.setHostedStrategy(p);
         break;
       }
+      case 'list_hosted_strategies': {
+        result = await client.listHostedStrategies();
+        break;
+      }
+      case 'delete_hosted_strategy': {
+        const { strategy_id } = args as { strategy_id: number };
+        result = await client.deleteHostedStrategy(strategy_id);
+        break;
+      }
 
       // ── 卖家 — 信誉 ──
       case 'get_reputation':
@@ -660,6 +902,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_messages': {
         const p = S.GetMessagesSchema.parse(args);
         result = await client.getMessages(p.status);
+        break;
+      }
+      case 'list_conversations': {
+        result = await client.listConversations();
+        break;
+      }
+      case 'get_conversation': {
+        const { conversation_id } = args as { conversation_id: string };
+        result = await client.getConversation(conversation_id);
         break;
       }
 
