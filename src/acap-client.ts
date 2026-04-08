@@ -54,7 +54,7 @@ export class AcapClient {
   }
 
   /** 构建 ACAP 请求信封（含 sender + 幂等键关联） */
-  private buildEnvelope(subProtocol: string, action: string, payload: any, idempotencyKey?: string): AcapEnvelope {
+  private buildEnvelope(subProtocol: string, action: string, data: any, idempotencyKey?: string): AcapEnvelope {
     return {
       acap_version: '1.0',
       message_id: crypto.randomUUID(),
@@ -64,7 +64,7 @@ export class AcapClient {
         ? { agent_id: this.config.agentId, agent_type: 'EXTERNAL', platform: 'mcp-server' }
         : undefined,
       auth: idempotencyKey ? { idempotency_key: idempotencyKey } : undefined,
-      payload: { action, ...payload },
+      payload: { action, data },
     };
   }
 
@@ -161,7 +161,7 @@ export class AcapClient {
 
   async publishIntent(text: string, budget?: number, currency?: string) {
     const envelope = this.buildEnvelope('IDP', 'PUBLISH_INTENT', {
-      text, budget_max: budget, currency: currency || 'CNY',
+      raw_text: text, budget_max: budget, currency: currency || 'CNY',
     });
     return this.request('POST', '/acap/v1/intents', envelope);
   }
@@ -192,7 +192,7 @@ export class AcapClient {
 
   async selectAndNegotiate(matchId: number, preferences?: { max_price?: number; quantity?: number }) {
     const envelope = this.buildEnvelope('ANP', 'CREATE_NEGOTIATION', {
-      match_id: matchId, hosted: true, ...preferences,
+      match_id: matchId, initial_offer: preferences?.max_price, quantity: preferences?.quantity,
     });
     return this.request('POST', '/acap/v1/negotiations', envelope);
   }
@@ -206,13 +206,11 @@ export class AcapClient {
   }
 
   async authorizeDeal(sessionCode: string) {
-    const envelope = this.buildEnvelope('ASP', 'AUTHORIZE', { session_code: sessionCode });
-    return this.request('POST', `/acap/v1/settlements/${sessionCode}/authorize`, envelope);
+    return this.request('POST', `/acap/v1/settlements/${sessionCode}/authorize`);
   }
 
   async rejectDeal(sessionCode: string) {
-    const envelope = this.buildEnvelope('ANP', 'REJECT', { session_code: sessionCode });
-    return this.request('POST', `/acap/v1/negotiations/${sessionCode}/reject`, envelope);
+    return this.request('POST', `/acap/v1/negotiations/${sessionCode}/reject`);
   }
 
   async getOrderStatus(sessionId: string) {
@@ -308,10 +306,11 @@ export class AcapClient {
   }
 
   async sendMessage(receiverAgentId: string, content: string, messageType?: string) {
-    const envelope = this.buildEnvelope('MSG', 'SEND_MESSAGE', {
-      receiver_agent_id: receiverAgentId, content, message_type: messageType || 'text',
+    return this.request('POST', '/acap/v1/messages', {
+      receiver_agent_id: receiverAgentId,
+      content,
+      message_type: messageType || 'text',
     });
-    return this.request('POST', '/acap/v1/messages', envelope);
   }
 
   async getMessages(status?: string) {
