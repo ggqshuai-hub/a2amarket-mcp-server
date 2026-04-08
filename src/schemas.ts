@@ -7,7 +7,7 @@ import { z } from 'zod';
 // ═══ Agent 身份管理 ═══
 
 export const RegisterAgentSchema = z.object({
-  handle: z.string().min(1).regex(/^[a-zA-Z0-9-]+$/, 'handle 只允许英文+数字+连字符'),
+  handle: z.string().min(3).max(30).regex(/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/, 'handle 只允许小写字母+数字+连字符，3-30位，首尾不能是连字符'),
   agent_name: z.string().min(1),
   agent_type: z.enum(['BUYER', 'SELLER']),
   contact_email: z.string().email(),
@@ -96,9 +96,10 @@ export const UpdateSupplySchema = z.object({
   description: z.string().optional(),
   category_l1: z.string().optional(),
   category_l2: z.string().optional(),
-  price_min: z.number().positive().optional(),
-  price_max: z.number().positive().optional(),
+  price: z.number().positive().optional(),
+  price_currency: z.string().optional(),
   moq: z.number().int().positive().optional(),
+  stock_quantity: z.number().int().nonnegative().optional(),
   delivery_days: z.number().int().positive().optional(),
   service_regions: z.string().optional(),
   keywords: z.string().optional(),
@@ -107,7 +108,7 @@ export const UpdateSupplySchema = z.object({
 // ═══ 卖家 — 订阅 ═══
 
 export const SubscribeIntentSchema = z.object({
-  category_l1: z.string().optional(),
+  category_l1: z.string().min(1, 'category_l1 为必填项'),
   category_l2: z.string().optional(),
   min_budget: z.number().nonnegative().optional(),
   max_budget: z.number().positive().optional(),
@@ -126,10 +127,17 @@ export const PaginationSchema = z.object({
 // ═══ 卖家 — 托管策略 ═══
 
 export const SetHostedStrategySchema = z.object({
-  strategy_type: z.enum(['linear_concession', 'tit_for_tat', 'time_decay']),
-  min_price: z.number().positive().optional(),
-  max_concession_rate: z.number().min(0).max(1).optional(),
-  auto_accept_above: z.number().positive().optional(),
+  strategy_name: z.string().optional(),
+  category_l1: z.string().min(1, 'category_l1 为必填项'),
+  category_l2: z.string().optional(),
+  min_budget: z.number().nonnegative().optional(),
+  max_budget: z.number().positive().optional(),
+  auto_price: z.number().positive().optional(),
+  auto_price_ratio: z.number().min(0).max(1).optional(),
+  auto_quantity: z.number().int().positive().optional(),
+  auto_delivery_days: z.number().int().positive().optional(),
+  auto_message: z.string().optional(),
+  auto_respond: z.boolean().optional(),
 });
 
 // ═══ 通用 ═══

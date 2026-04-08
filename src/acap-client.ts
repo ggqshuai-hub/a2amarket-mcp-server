@@ -283,8 +283,11 @@ export class AcapClient {
   // ══════════════════════════════════════════════════════════
 
   async setHostedStrategy(data: {
-    strategy_type: string; min_price?: number; max_concession_rate?: number;
-    auto_accept_above?: number; extra_params?: Record<string, any>;
+    strategy_name?: string; category_l1: string; category_l2?: string;
+    min_budget?: number; max_budget?: number;
+    auto_price?: number; auto_price_ratio?: number;
+    auto_quantity?: number; auto_delivery_days?: number;
+    auto_message?: string; auto_respond?: boolean;
   }) {
     return this.request('POST', '/acap/v1/hosted/strategies', data);
   }
