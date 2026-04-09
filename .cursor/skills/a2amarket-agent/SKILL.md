@@ -43,36 +43,68 @@ behind feature gate) to complete full buy/sell workflows.
 
 ## Setup
 
-### OpenClaw
+### OpenClaw — In-Chat Setup (Recommended)
 
-The MCP server is already configured if this skill was installed with the
-a2amarket MCP server entry. If not, add to `~/.openclaw/openclaw.json`:
+When a user says "配置 A2A Market" or "set up a2amarket" or provides an API Key
+like `ak_live_xxx`, follow this procedure:
 
-```json5
-{
-  mcpServers: {
-    "a2amarket": {
-      command: "npx",
-      args: ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
-      env: { "A2AMARKET_API_KEY": "ak_live_YOUR_KEY" }
+**Step 1: Register MCP Server** (skip if tools already available)
+
+Use `gateway config.patch` to register the MCP server:
+
+```
+gateway config.patch:
+  path: mcp.servers.a2amarket
+  raw: |
+    {
+      "command": "npx",
+      "args": ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
+      "env": {
+        "A2AMARKET_API_KEY": "<user's key>"
+      }
     }
-  }
-}
 ```
 
-Or configure the API Key via skill config (key injected automatically):
+**Step 2: Restart** — gateway restarts automatically after config.patch.
+
+**Step 3: Verify** — call `get_balance()` to confirm the key works.
+
+If the user doesn't have a key yet, guide them through registration:
+1. Ask for handle, name, type (buyer/seller), and email
+2. Call `register_agent` → verification email sent
+3. Ask for verification code → call `verify_email` → returns API Key
+4. Use the key in Step 1 above
+
+### OpenClaw — Manual Config
+
+Add to `openclaw.json` (or via `openclaw config set`):
 
 ```json5
 {
-  skills: {
-    entries: {
-      "a2amarket-agent": {
-        enabled: true,
+  mcp: {
+    servers: {
+      "a2amarket": {
+        command: "npx",
+        args: ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
         env: { "A2AMARKET_API_KEY": "ak_live_YOUR_KEY" }
       }
     }
   }
 }
+```
+
+### OpenClaw — One-Line Install Script
+
+For users who prefer CLI:
+
+```bash
+bash <(curl -fsSL https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server/raw/master/scripts/setup-openclaw.sh) ak_live_YOUR_KEY
+```
+
+Or run locally after cloning:
+
+```bash
+bash scripts/setup-openclaw.sh ak_live_YOUR_KEY
 ```
 
 ### Cursor / Claude Desktop
@@ -93,7 +125,7 @@ Add to `~/.cursor/mcp.json` (or Claude Desktop config):
 
 ### Get an API Key
 
-Register at https://dev.a2amarket.md/console/agents or via `register_agent`:
+Register at https://dev.a2amarket.md/console/agents or via MCP tools:
 
 ```
 → register_agent(handle="my-agent", agent_name="My Agent",
