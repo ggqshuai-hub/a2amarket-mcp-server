@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * A2A Market MCP Server v0.3.0
+ * A2A Market MCP Server v0.3.1
  *
  * 将 A2A Market 平台能力暴露为 31 个 MCP Tools，
  * 让 Claude/Cursor 等 AI 工具直接操作 A2A Market。
@@ -56,6 +56,11 @@ Environment:
   A2AMARKET_AGENT_ID      当前 Agent ID（可选，用于信封 sender）
   A2AMARKET_MCP_PORT      SSE 端口（默认 3100）
   A2AMARKET_LOCALE        错误信息语言 zh|en（默认 zh）
+  A2AMARKET_FEATURES      启用的功能组（逗号分隔，"all" 全部开放）
+                          可选值: identity,intent,negotiation,settlement,
+                                  preferences,supply,seller_respond,subscription,
+                                  hosted_strategy,reputation,compute,messaging
+                          默认值: 不含 negotiation / settlement / seller_respond
 `);
   process.exit(0);
 }
@@ -83,16 +88,78 @@ const client = new AcapClient({
 });
 
 const server = new Server(
-  { name: 'a2amarket', version: '0.3.0' },
+  { name: 'a2amarket', version: '0.3.1' },
   { capabilities: { tools: {} } }
 );
 
-logDebug('init', `baseUrl=${BASE_URL}, agentId=${AGENT_ID || '(not set)'}, hmac=${HMAC_SECRET ? 'yes' : 'no'}`);
+// ── 特性开关 ──
+// 通过 A2AMARKET_FEATURES 环境变量控制哪些工具组对外可见。
+// 值为逗号分隔的 group 名称，"all" 表示全部开放。
+// 默认不含 negotiation / settlement / seller_respond，这些功能暂不对外开放。
 
-// ── Tool 定义（31 个） ──
+const FEATURE_GROUPS: Record<string, string[]> = {
+  identity: [
+    'register_agent', 'get_profile', 'update_profile', 'search_agents',
+    'verify_email', 'check_handle', 'get_my_agents', 'list_api_keys',
+    'get_usage', 'rotate_api_key',
+  ],
+  intent: [
+    'publish_intent', 'get_intent_status', 'cancel_intent',
+    'get_sourcing_status', 'list_matches', 'list_responses',
+  ],
+  negotiation: [
+    'select_and_negotiate', 'get_negotiation_status', 'get_negotiation_rounds',
+    'submit_offer', 'accept_deal', 'reject_deal',
+  ],
+  settlement: [
+    'create_settlement', 'authorize_deal', 'get_order_status',
+  ],
+  preferences: [
+    'set_preferences', 'get_preferences',
+  ],
+  supply: [
+    'declare_supply', 'update_supply', 'list_supply_products',
+    'get_supply_product', 'delete_supply_product',
+  ],
+  seller_respond: [
+    'respond_to_intent',
+  ],
+  subscription: [
+    'subscribe_intent', 'unsubscribe_intent', 'list_subscriptions',
+    'get_incoming_intents',
+  ],
+  hosted_strategy: [
+    'set_hosted_strategy', 'list_hosted_strategies', 'delete_hosted_strategy',
+  ],
+  reputation: [
+    'get_reputation', 'check_reputation',
+  ],
+  compute: [
+    'get_balance',
+  ],
+  messaging: [
+    'send_message', 'get_messages', 'list_conversations', 'get_conversation',
+  ],
+};
+
+const DEFAULT_FEATURES = 'identity,intent,preferences,supply,subscription,hosted_strategy,reputation,compute,messaging';
+
+const featuresRaw = process.env.A2AMARKET_FEATURES || DEFAULT_FEATURES;
+const enabledGroups = new Set(
+  featuresRaw === 'all' ? Object.keys(FEATURE_GROUPS) : featuresRaw.split(',').map(s => s.trim()),
+);
+
+const enabledTools = new Set(
+  [...enabledGroups].flatMap(g => FEATURE_GROUPS[g] || []),
+);
+
+logDebug('init', `baseUrl=${BASE_URL}, agentId=${AGENT_ID || '(not set)'}, hmac=${HMAC_SECRET ? 'yes' : 'no'}`);
+logDebug('init', `features=${[...enabledGroups].join(',')}, tools=${enabledTools.size}/${Object.values(FEATURE_GROUPS).flat().length}`);
+
+// ── Tool 定义（47 个，按特性开关过滤） ──
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
+  tools: ([
     // ═══ 通用 — Agent 身份管理 ═══
     {
       name: 'register_agent',
@@ -497,7 +564,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           price: { type: 'number', description: '报价金额' },
           quantity: { type: 'number', description: '可供数量' },
           delivery_days: { type: 'number', description: '交货天数' },
-          message: { type: 'string', description: '附言' },
+          message: { type: 'string', description: '附言（映射为 agent_message）' },
         },
         required: ['intent_id', 'price'],
       },
@@ -649,7 +716,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ['conversation_id'],
       },
     },
-  ],
+  ] as Array<{ name: string; description: string; inputSchema: any }>).filter(t => enabledTools.has(t.name)),
 }));
 
 // ── Tool 处理（Zod 校验 + 结构化错误） ──
@@ -657,6 +724,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   logDebug('tool', `call: ${name}`, args);
+
+  if (!enabledTools.has(name)) {
+    const hint = name === 'Unknown' ? '' : ' 如需开放，请设置环境变量 A2AMARKET_FEATURES=all';
+    return { content: [{ type: 'text', text: `该功能（${name}）当前版本暂未开放。${hint}` }], isError: true };
+  }
 
   try {
     let result: any;
@@ -839,8 +911,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case 'respond_to_intent': {
-        const { intent_id, ...data } = args as { intent_id: number; price: number; quantity?: number; delivery_days?: number; message?: string };
-        result = await client.respondToIntent(intent_id, data);
+        const { intent_id, message, ...rest } = args as { intent_id: number; price: number; quantity?: number; delivery_days?: number; message?: string };
+        result = await client.respondToIntent(intent_id, { ...rest, agent_message: message });
         break;
       }
 
@@ -941,7 +1013,7 @@ async function main() {
       // 健康检查
       if (req.method === 'GET' && req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', version: '0.3.0', tools: 31 }));
+        res.end(JSON.stringify({ status: 'ok', version: '0.3.0', tools: enabledTools.size }));
         return;
       }
 
@@ -976,7 +1048,7 @@ async function main() {
     });
 
     httpServer.listen(port, () => {
-      logInfo('init', `A2A Market MCP Server v0.3.0 running on SSE (port ${port}, 31 tools)`);
+      logInfo('init', `A2A Market MCP Server v0.3.1 running on SSE (port ${port}, ${enabledTools.size} tools)`);
       logInfo('init', `SSE endpoint: http://localhost:${port}/sse`);
       logInfo('init', `Health check: http://localhost:${port}/health`);
     });
@@ -984,7 +1056,7 @@ async function main() {
     // Stdio 传输模式（默认）
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    logInfo('init', 'A2A Market MCP Server v0.3.0 running on stdio (31 tools)');
+    logInfo('init', `A2A Market MCP Server v0.3.1 running on stdio (${enabledTools.size} tools)`);
   }
 }
 

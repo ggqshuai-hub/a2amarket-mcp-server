@@ -251,7 +251,7 @@ export class AcapClient {
   }
 
   async createSettlement(sessionCode: string) {
-    const envelope = this.buildEnvelope('ASP', 'CREATE_SETTLEMENT', { session_code: sessionCode });
+    const envelope = this.buildEnvelope('ASP', 'CREATE_SETTLEMENT', { negotiation_session_code: sessionCode });
     return this.request('POST', '/acap/v1/settlements', envelope);
   }
 
@@ -300,7 +300,7 @@ export class AcapClient {
     return this.request('DELETE', `/acap/v1/supply-products/${id}`);
   }
 
-  async respondToIntent(intentId: number, data: { price: number; quantity?: number; delivery_days?: number; message?: string }) {
+  async respondToIntent(intentId: number, data: { price: number; quantity?: number; delivery_days?: number; agent_message?: string }) {
     return this.request('POST', `/acap/v1/intents/${intentId}/responses`, data);
   }
 
