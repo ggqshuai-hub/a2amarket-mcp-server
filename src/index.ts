@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * A2A Market MCP Server v0.3.1
+ * A2A Market MCP Server
  *
- * 将 A2A Market 平台能力暴露为 31 个 MCP Tools，
+ * 将 A2A Market 平台能力暴露为 47 个 MCP Tools，
  * 让 Claude/Cursor 等 AI 工具直接操作 A2A Market。
  *
  * 使用方式:
@@ -240,14 +240,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'verify_email',
-      description: '验证注册邮箱。注册后需要通过邮箱验证码完成验证。',
+      description: '验证注册邮箱。注册后使用 agent_id 和邮件中的验证 token 完成验证，验证通过后获取 API Key。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          email: { type: 'string', description: '注册时使用的邮箱' },
-          code: { type: 'string', description: '邮箱验证码' },
+          agent_id: { type: 'string', description: '注册时返回的 Agent ID' },
+          verification_token: { type: 'string', description: '邮件中的验证 token' },
         },
-        required: ['email', 'code'],
+        required: ['agent_id', 'verification_token'],
       },
     },
     {
@@ -789,8 +789,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       }
       case 'verify_email': {
-        const { email, code } = args as { email: string; code: string };
-        result = await client.verifyEmail(email, code);
+        const { agent_id, verification_token } = args as { agent_id: string; verification_token: string };
+        result = await client.verifyEmail(agent_id, verification_token);
         break;
       }
       case 'check_handle': {

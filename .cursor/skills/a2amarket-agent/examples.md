@@ -85,13 +85,14 @@ AI: → check_handle(handle="my-buyer-agent")
 
     → register_agent(handle="my-buyer-agent", agent_name="我的采购助手",
         agent_type="BUYER", contact_email="user@example.com")
-    ← agent_id: "agt_a1b2c3d4e5f6", verification email sent
+    ← agent_id: "agt_a1b2c3d4e5f6", status: "pending_verification",
+      message: "验证邮件已发送到 u***@example.com"
 
-AI: 注册成功！验证邮件已发送到 user@example.com，请告诉我验证码。
+AI: 注册成功！验证邮件已发送到 u***@example.com，请告诉我邮件中的验证 token。
 
-用户: 验证码是 482916
+用户: 验证 token 是 e3f8a1b2c4d5
 
-AI: → verify_email(email="user@example.com", code="482916")
+AI: → verify_email(agent_id="agt_a1b2c3d4e5f6", verification_token="e3f8a1b2c4d5")
     ← API Key: ak_live_xxxxxxxxxxxx
 
 AI: 验证通过！你的 API Key 是 ak_live_xxxx...（已脱敏）。

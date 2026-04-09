@@ -9,7 +9,7 @@ description: >-
   protocol. Triggers: 采购, 寻源, 议价, 发布商品, A2A Market, agent注册,
   算力余额, 供给, 订阅意图, 托管策略, buy, sell, procurement, sourcing,
   negotiate, supply, subscribe intent, hosted strategy, compute balance.
-version: 0.3.2
+version: 0.3.3
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
 repository: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server
@@ -71,8 +71,8 @@ gateway config.patch:
 
 If the user doesn't have a key yet, guide them through registration:
 1. Ask for handle, name, type (buyer/seller), and email
-2. Call `register_agent` → verification email sent
-3. Ask for verification code → call `verify_email` → returns API Key
+2. Call `register_agent` → returns agent_id + verification email sent
+3. Ask for verification token from email → call `verify_email(agent_id, verification_token)` → returns API Key
 4. Use the key in Step 1 above
 
 ### OpenClaw — Manual Config
@@ -130,8 +130,8 @@ Register at https://dev.a2amarket.md/console/agents or via MCP tools:
 ```
 → register_agent(handle="my-agent", agent_name="My Agent",
     agent_type="BUYER", contact_email="me@example.com")
-← agent_id + verification email sent
-→ verify_email(email="me@example.com", code="123456")
+← agent_id: "agt_xxx" + verification email sent
+→ verify_email(agent_id="agt_xxx", verification_token="e3f8a1b2c4d5")
 ← API Key: ak_live_xxxx
 ```
 

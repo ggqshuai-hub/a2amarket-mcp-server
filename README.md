@@ -149,6 +149,7 @@ AI: [调用 list_matches] → "推荐前 3 家，最低报价 ¥245/箱"
 
 ## 版本
 
+- v0.3.3 — 修复 `verify_email` 字段名对齐（`agent_id`+`verification_token`）；修复 `registerAgent`/`updateProfile` camelCase→snake_case 字段映射；源码注释对齐
 - v0.3.2 — 生产级 `--help` 与集成说明；默认 `A2AMARKET_BASE_URL=https://agent.a2amarket.md`；`get_balance` 工具描述防误用；Skill 元数据对齐
 - v0.3.1 — 47 个 Tool，特性开关（默认开放 37 个），修复 create_settlement/respond_to_intent 字段映射
 - v0.3.0 — 47 个 Tool，SSE 传输，CLI 参数，Zod 校验，中英双语错误，日志系统

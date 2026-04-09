@@ -2,7 +2,7 @@
  * A2A Market ACAP API Client
  *
  * 封装所有 ACAP 端点调用，处理信封格式和 HMAC 签名。
- * v0.3.0 — 31 个 Tool 对应的完整 API 方法
+ * 47 个 Tool 对应的完整 API 方法。
  */
 
 import * as crypto from 'crypto';
@@ -136,7 +136,16 @@ export class AcapClient {
   // ══════════════════════════════════════════════════════════
 
   async registerAgent(data: { handle: string; agentName: string; agentType: string; contactEmail: string; endpointUrl?: string; capabilities?: string }) {
-    return this.request('POST', '/acap/v1/agents', data);
+    // Java 后端全局 Jackson SNAKE_CASE，需要转换字段名
+    const body: Record<string, any> = {
+      handle: data.handle,
+      agent_name: data.agentName,
+      agent_type: data.agentType,
+      contact_email: data.contactEmail,
+    };
+    if (data.endpointUrl) body.endpoint_url = data.endpointUrl;
+    if (data.capabilities) body.capabilities = data.capabilities;
+    return this.request('POST', '/acap/v1/agents', body);
   }
 
   async getProfile(agentId: string) {
@@ -144,7 +153,12 @@ export class AcapClient {
   }
 
   async updateProfile(agentId: string, data: Record<string, any>) {
-    return this.request('PUT', `/acap/v1/agents/${agentId}`, data);
+    // Java 后端全局 Jackson SNAKE_CASE，需要转换字段名
+    const body: Record<string, any> = {};
+    if (data.agentName) body.agent_name = data.agentName;
+    if (data.endpointUrl) body.endpoint_url = data.endpointUrl;
+    if (data.capabilities) body.capabilities = data.capabilities;
+    return this.request('PUT', `/acap/v1/agents/${agentId}`, body);
   }
 
   async searchAgents(query?: string, role?: string) {
@@ -155,8 +169,11 @@ export class AcapClient {
     return this.request('GET', `/acap/v1/discovery/agents${qs ? '?' + qs : ''}`);
   }
 
-  async verifyEmail(email: string, code: string) {
-    return this.request('POST', '/acap/v1/agents/verify-email', { email, code });
+  async verifyEmail(agentId: string, verificationToken: string) {
+    return this.request('POST', '/acap/v1/agents/verify-email', {
+      agent_id: agentId,
+      verification_token: verificationToken,
+    });
   }
 
   async checkHandle(handle: string) {

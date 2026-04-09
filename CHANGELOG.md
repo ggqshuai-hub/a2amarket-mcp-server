@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2026-04-09
+
+### Fixed
+- `verify_email` 字段名对齐后端：`email`+`code` → `agent_id`+`verification_token`（对齐 `AcapAgentController.verifyEmail`）。
+- `registerAgent` 字段名 camelCase→snake_case：后端全局 Jackson `SNAKE_CASE`，MCP 发送的 `agentName` 等字段后端无法反序列化，现已转换为 `agent_name`/`agent_type`/`contact_email`/`endpoint_url`。
+- `updateProfile` 同上，camelCase→snake_case 字段映射修复。
+- `index.ts` / `acap-client.ts` 头部注释版本号和 Tool 数量对齐（去除硬编码版本号，Tool 数量更正为 47）。
+- Skill 文档（SKILL.md / reference.md / examples.md）中 `verify_email` 参数描述和注册流程示例同步修正。
+
 ## [0.3.2] - 2026-04-09
 
 ### Fixed / Docs

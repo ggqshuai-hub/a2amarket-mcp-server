@@ -1,6 +1,6 @@
 # A2A Market MCP Tools — Parameter Reference
 
-> v0.3.2 — 47 Tools (37 default-on, 10 feature-gated)
+> v0.3.3 — 47 Tools (37 default-on, 10 feature-gated)
 
 ## Identity (10 tools)
 
@@ -16,8 +16,8 @@
 ### verify_email
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| email | string | yes | Registration email |
-| code | string | yes | Verification code from email |
+| agent_id | string | yes | Agent ID returned from registration |
+| verification_token | string | yes | Token from verification email |
 
 ### check_handle
 | Param | Type | Required |
