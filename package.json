@@ -1,6 +1,6 @@
 {
   "name": "@hz-abyssal-heart/a2amarket-mcp-server",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A2A Market MCP Server — Connect AI agents to A2A Market via Model Context Protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,10 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "start": "node dist/index.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "pack:skillhub": "node scripts/pack-skillhub.mjs",
+    "pack:npm": "node scripts/pack-npm-tgz.mjs",
+    "release:artifacts": "npm run build && npm run pack:npm && npm run pack:skillhub"
   },
   "keywords": [
     "mcp",

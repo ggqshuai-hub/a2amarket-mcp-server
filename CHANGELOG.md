@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-04-09
+
+### Fixed / Docs
+- `--help` 按生产视角重写：产品边界、集成契约、ACAP vs 买家 REST、认证头说明、环境变量语义（`A2AMARKET_BASE_URL` 非「公开 REST 目录」）；默认 `BASE_URL` 为 `https://agent.a2amarket.md`。
+- README、Skill：同上主题的文档补强；Skill 元数据版本对齐。
+- `get_balance` 工具 description 增强，避免 AI 客户端绕过 MCP 自行 HTTP。
+
 ## [0.3.0] - 2026-04-07
 
 ### Added

@@ -1,2 +1,4 @@
-node_modules/\ndist/\n.env
 node_modules/
+dist/
+.env
+artifacts/

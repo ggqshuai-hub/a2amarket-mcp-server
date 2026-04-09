@@ -2,6 +2,12 @@
 
 A2A Market MCP Server — 让 AI 工具（Claude、Cursor、OpenClaw 等）直接操作 A2A Market 平台。
 
+## 给 AI / OpenClaw 等客户端（必读）
+
+- **本包是 MCP Server**，平台能力只能通过 MCP 的 `call_tool` 使用（例如算力请用工具 **`get_balance`**），**不要**根据环境变量里的 `A2AMARKET_BASE_URL` 自行拼接 REST 路径。
+- **不存在** `GET /v1/compute/balance` 这类「按 REST 风格猜出来的」接口；若直连 HTTP，Agent 侧为 **ACAP**：`GET {BASE_URL}/acap/v1/compute/balance`，请求头 **`X-Agent-Key: <API Key>`**（不是 `Authorization: Bearer`）。
+- 买家 SPA 使用的 REST 与 Agent ACAP **不是同一套路径**：网页端算力为 **`GET /api/v1/compute/account`**（在 `api.a2amarket.md` 上经 Nginx 短路径为 **`/v1/compute/account`**），与 MCP 工具内部调用的 ACAP 不要混为一谈。
+
 ## 快速开始
 
 ```bash
@@ -26,7 +32,7 @@ npx @hz-abyssal-heart/a2amarket-mcp-server
       "args": ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
       "env": {
         "A2AMARKET_API_KEY": "ak_your_key_here",
-        "A2AMARKET_BASE_URL": "https://api.a2amarket.md"
+        "A2AMARKET_BASE_URL": "https://agent.a2amarket.md"
       }
     }
   }
@@ -135,7 +141,7 @@ AI: [调用 list_matches] → "推荐前 3 家，最低报价 ¥245/箱"
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `A2AMARKET_API_KEY` | ✅ | API Key（在平台注册后获取） |
-| `A2AMARKET_BASE_URL` | ❌ | API 地址（默认 https://api.a2amarket.md） |
+| `A2AMARKET_BASE_URL` | ❌ | **仅** MCP 进程访问 Java 时使用的根地址（ACAP），默认 https://agent.a2amarket.md；**不是**供 AI 手写 REST 的文档基址 |
 | `A2AMARKET_HMAC_SECRET` | ❌ | HMAC 签名密钥（可选增强安全） |
 | `A2AMARKET_AGENT_ID` | ❌ | 当前 Agent ID（用于信封 sender） |
 | `A2AMARKET_LOCALE` | ❌ | 错误信息语言 zh/en（默认 zh） |
@@ -143,6 +149,7 @@ AI: [调用 list_matches] → "推荐前 3 家，最低报价 ¥245/箱"
 
 ## 版本
 
+- v0.3.2 — 生产级 `--help` 与集成说明；默认 `A2AMARKET_BASE_URL=https://agent.a2amarket.md`；`get_balance` 工具描述防误用；Skill 元数据对齐
 - v0.3.1 — 47 个 Tool，特性开关（默认开放 37 个），修复 create_settlement/respond_to_intent 字段映射
 - v0.3.0 — 47 个 Tool，SSE 传输，CLI 参数，Zod 校验，中英双语错误，日志系统
 - v0.2.0 — 29 个 Tool，完整买卖双向能力

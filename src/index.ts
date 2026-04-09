@@ -19,48 +19,74 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createServer, IncomingMessage, ServerResponse } from 'http';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { AcapClient } from './acap-client.js';
 import { formatError, setLocale } from './errors.js';
 import { enableDebug, logDebug, logInfo, logError } from './logger.js';
 import * as S from './schemas.js';
+
+// ── 版本号（从 package.json 读取，单一来源） ──
+
+const PKG = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+const VERSION: string = PKG.version;
+const PKG_NAME: string = PKG.name;
 
 // ── CLI 参数解析 ──
 
 const argv = process.argv.slice(2);
 
 if (argv.includes('--version') || argv.includes('-v')) {
-  console.log('@hz-abyssal-heart/a2amarket-mcp-server@0.3.0');
+  console.log(`${PKG_NAME}@${VERSION}`);
   process.exit(0);
 }
 
 if (argv.includes('--help') || argv.includes('-h')) {
   console.log(`
-A2A Market MCP Server — AI Agent 交易平台 MCP 桥接
+A2A Market MCP Server
+  ${PKG_NAME}@${VERSION} — 将 A2A Market 平台能力以 MCP（Model Context Protocol）工具形式暴露给
+  Claude / Cursor / OpenClaw 等宿主；本进程不是「对外 REST 网关」，也不提供可随意拼接的公开 API 目录。
 
-Usage:
+用法
   npx @hz-abyssal-heart/a2amarket-mcp-server [options]
 
-Options:
-  --stdio          Stdio 传输（默认）
-  --sse            SSE 传输模式（HTTP Server）
-  --port <port>    SSE 端口（默认 3100，或 A2AMARKET_MCP_PORT）
-  --debug          启用调试日志
-  --locale <lang>  错误信息语言 zh|en（默认 zh）
-  -v, --version    显示版本
-  -h, --help       显示帮助
+──────────────────────────────── 生产集成契约（必读）────────────────────────────────
+  1) 能力入口：仅通过 MCP 的 list_tools / call_tool 调用；禁止根据环境变量中的根地址自行构造
+     未在官方文档中列明的 HTTP 路径（常见误用：GET …/v1/compute/balance — 平台无此资源）。
+  2) 本进程出站请求：面向平台后端的 ACAP HTTP，根地址由 A2AMARKET_BASE_URL 指定；路径形如
+     /acap/v1/…，鉴权请求头为 X-Agent-Key: <API Key>。勿用 Authorization: Bearer <API Key>
+     冒充买家 JWT；二者场景不同。
+  3) 与买家 Web 前端 REST 区分：买家 SPA 算力等为 GET /api/v1/compute/account（在 api.* 主机上
+     经反向代理可能表现为 /v1/compute/account）；与上条 Agent/ACAP 不是同一套接口，勿混用。
+  4) 示例：算力余额应调用 MCP 工具 get_balance；进程内部对应 GET {BASE_URL}/acap/v1/compute/balance。
 
-Environment:
-  A2AMARKET_API_KEY       API Key（必填）
-  A2AMARKET_BASE_URL      服务端地址（默认 https://api.a2amarket.md）
-  A2AMARKET_HMAC_SECRET   HMAC 签名密钥（可选）
-  A2AMARKET_AGENT_ID      当前 Agent ID（可选，用于信封 sender）
-  A2AMARKET_MCP_PORT      SSE 端口（默认 3100）
-  A2AMARKET_LOCALE        错误信息语言 zh|en（默认 zh）
-  A2AMARKET_FEATURES      启用的功能组（逗号分隔，"all" 全部开放）
-                          可选值: identity,intent,negotiation,settlement,
-                                  preferences,supply,seller_respond,subscription,
-                                  hosted_strategy,reputation,compute,messaging
-                          默认值: 不含 negotiation / settlement / seller_respond
+──────────────────────────────── English (for host / AI runtimes) ────────────────────────
+  MCP-only integration: use call_tool; do not invent REST paths from BASE_URL.
+  Outbound: ACAP under /acap/v1/ with header X-Agent-Key. Not Bearer API keys.
+
+选项
+  --stdio          Stdio 传输（默认，供本地 MCP 宿主子进程使用）
+  --sse            启动内置 HTTP Server，使用 SSE 传输（需配合 --port 或 A2AMARKET_MCP_PORT）
+  --port <n>       SSE 监听端口（默认 3100）
+  --debug          将请求与调试信息输出到 stderr（stdout 留给 MCP 协议）
+  --locale <zh|en> 工具返回错误文案语言（也可用 A2AMARKET_LOCALE）
+  -v, --version    仅打印包名与版本号
+  -h, --help       本说明
+
+环境变量
+  A2AMARKET_API_KEY       必填。Agent API Key（ak_live_…），用于 X-Agent-Key。
+  A2AMARKET_BASE_URL      可选。本进程访问平台后端的根 URL，须可直达 /acap/v1 与 /a2a/v1（按工具需要）。
+                          默认 https://agent.a2amarket.md
+                          说明：此为 MCP 子进程出站配置，不是「给终端用户手调 REST 的文档基址」。
+  A2AMARKET_HMAC_SECRET   可选。配置后与请求体一并参与 ACAP HMAC 签名（X-ACAP-Signature）。
+  A2AMARKET_AGENT_ID      可选。写入 ACAP 信封 sender.agent_id。
+  A2AMARKET_MCP_PORT      可选。SSE 模式端口，默认 3100。
+  A2AMARKET_LOCALE        可选。zh | en，默认 zh。
+  A2AMARKET_FEATURES      可选。启用的工具组，逗号分隔；all 表示全部。
+                          组名: identity, intent, negotiation, settlement, preferences,
+                          supply, seller_respond, subscription, hosted_strategy,
+                          reputation, compute, messaging
+                          默认不含: negotiation, settlement, seller_respond
 `);
   process.exit(0);
 }
@@ -73,7 +99,7 @@ enableDebug(DEBUG);
 const localeArg = argv.includes('--locale') ? argv[argv.indexOf('--locale') + 1] : undefined;
 setLocale(localeArg || process.env.A2AMARKET_LOCALE || 'zh');
 
-const BASE_URL = process.env.A2AMARKET_BASE_URL || 'https://api.a2amarket.md';
+const BASE_URL = process.env.A2AMARKET_BASE_URL || 'https://agent.a2amarket.md';
 const API_KEY = process.env.A2AMARKET_API_KEY || '';
 const HMAC_SECRET = process.env.A2AMARKET_HMAC_SECRET;
 const AGENT_ID = process.env.A2AMARKET_AGENT_ID;
@@ -88,7 +114,7 @@ const client = new AcapClient({
 });
 
 const server = new Server(
-  { name: 'a2amarket', version: '0.3.1' },
+  { name: 'a2amarket', version: VERSION },
   { capabilities: { tools: {} } }
 );
 
@@ -674,7 +700,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_balance',
-      description: '查询算力余额。',
+      description:
+        '查询当前 Agent 关联用户的算力余额。必须通过本 MCP 工具调用；禁止根据 A2AMARKET_BASE_URL 自行 HTTP 请求。' +
+        '不存在 GET /v1/compute/balance；内部为 ACAP GET /acap/v1/compute/balance，请求头 X-Agent-Key。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
@@ -1013,7 +1041,7 @@ async function main() {
       // 健康检查
       if (req.method === 'GET' && req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', version: '0.3.0', tools: enabledTools.size }));
+        res.end(JSON.stringify({ status: 'ok', version: VERSION, tools: enabledTools.size }));
         return;
       }
 
@@ -1048,7 +1076,7 @@ async function main() {
     });
 
     httpServer.listen(port, () => {
-      logInfo('init', `A2A Market MCP Server v0.3.1 running on SSE (port ${port}, ${enabledTools.size} tools)`);
+      logInfo('init', `A2A Market MCP Server v${VERSION} running on SSE (port ${port}, ${enabledTools.size} tools)`);
       logInfo('init', `SSE endpoint: http://localhost:${port}/sse`);
       logInfo('init', `Health check: http://localhost:${port}/health`);
     });
@@ -1056,7 +1084,7 @@ async function main() {
     // Stdio 传输模式（默认）
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    logInfo('init', `A2A Market MCP Server v0.3.1 running on stdio (${enabledTools.size} tools)`);
+    logInfo('init', `A2A Market MCP Server v${VERSION} running on stdio (${enabledTools.size} tools)`);
   }
 }
 

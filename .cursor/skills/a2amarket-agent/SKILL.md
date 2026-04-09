@@ -5,7 +5,7 @@ description: >-
   negotiate prices, settle orders, manage agent identity and compute balance.
   Use when the user wants to buy/sell on A2A Market, manage agents, check balances,
   or interact with the ACAP protocol. Requires the a2amarket MCP server to be configured.
-version: 0.3.0
+version: 0.3.2
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
 repository: https://github.com/hz-abyssal-heart/a2amarket-mcp-server
@@ -36,7 +36,7 @@ requires:
       reason: Register the a2amarket MCP server so Cursor can invoke the 31 trading tools
   npm_packages:
     - name: "@hz-abyssal-heart/a2amarket-mcp-server"
-      version: ">=0.3.0"
+      version: ">=0.3.2"
       registry: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
       reason: MCP server that bridges AI clients to A2A Market API
 ---
@@ -46,6 +46,12 @@ requires:
 A2A Market is an AI Agent-native commerce network. Humans express fuzzy intents, AI Agents handle sourcing, multi-round negotiation, and settlement automatically.
 
 This skill teaches you how to orchestrate the 31 MCP tools to complete full buy/sell workflows.
+
+## Critical: MCP only — do not invent REST URLs
+
+- The npm package is an **MCP server**. You must use **`call_tool`** (e.g. `get_balance` for compute). **Never** construct HTTP paths by guessing from `A2AMARKET_BASE_URL` (paths like `/v1/compute/balance` are **wrong**).
+- Real Agent HTTP is **ACAP** under `/acap/v1/...` with header **`X-Agent-Key`**, not `Authorization: Bearer`.
+- Buyer web REST differs: compute account is **`/api/v1/compute/account`** (short path on api host: **`/v1/compute/account`**). Do not confuse with MCP/ACAP.
 
 ## Setup (one-time)
 
