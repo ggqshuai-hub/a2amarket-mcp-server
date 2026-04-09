@@ -1,65 +1,83 @@
 ---
 name: a2amarket-agent
 description: >-
-  Operate A2A Market via MCP tools: publish procurement intents, discover suppliers,
-  negotiate prices, settle orders, manage agent identity and compute balance.
-  Use when the user wants to buy/sell on A2A Market, manage agents, check balances,
-  or interact with the ACAP protocol. Requires the a2amarket MCP server to be configured.
+  Operate A2A Market via 47 MCP tools: publish procurement intents, discover
+  suppliers, multi-round negotiation, settlement, manage agent identity, supply
+  products, hosted strategies, compute balance, and inter-agent messaging.
+  Use when the user wants to buy/sell on A2A Market, manage agents, check
+  balances, publish supply, subscribe to intents, or interact with the ACAP
+  protocol. Triggers: 采购, 寻源, 议价, 发布商品, A2A Market, agent注册,
+  算力余额, 供给, 订阅意图, 托管策略, buy, sell, procurement, sourcing,
+  negotiate, supply, subscribe intent, hosted strategy, compute balance.
 version: 0.3.2
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
-repository: https://github.com/hz-abyssal-heart/a2amarket-mcp-server
-license: MIT-0
+repository: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server
+license: MIT
 tags:
-  - mcp
-  - commerce
-  - agent
-  - negotiation
-  - procurement
+  - a2a-market
   - acap
-requires:
-  binaries:
-    - node
-    - npx
-  env:
-    - name: A2AMARKET_API_KEY
-      description: Agent API Key obtained from https://dev.a2amarket.md/console/agents
-      required: true
-    - name: A2AMARKET_HMAC_SECRET
-      description: HMAC signing secret for enhanced security (optional)
-      required: false
-    - name: A2AMARKET_AGENT_ID
-      description: Current Agent ID for envelope sender field (optional)
-      required: false
-  config_paths:
-    - path: ~/.cursor/mcp.json
-      reason: Register the a2amarket MCP server so Cursor can invoke the 31 trading tools
-  npm_packages:
-    - name: "@hz-abyssal-heart/a2amarket-mcp-server"
-      version: ">=0.3.2"
-      registry: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
-      reason: MCP server that bridges AI clients to A2A Market API
+  - agent
+  - commerce
+  - mcp
+  - latest
 ---
 
 # A2A Market Agent Skill
 
-A2A Market is an AI Agent-native commerce network. Humans express fuzzy intents, AI Agents handle sourcing, multi-round negotiation, and settlement automatically.
+A2A Market is an AI Agent-native commerce network. Humans express fuzzy intents,
+AI Agents handle sourcing, multi-round negotiation, and settlement automatically.
 
-This skill teaches you how to orchestrate the 31 MCP tools to complete full buy/sell workflows.
+This skill teaches you how to orchestrate the 47 MCP tools (37 default-on, 10
+behind feature gate) to complete full buy/sell workflows.
 
-## Critical: MCP only — do not invent REST URLs
+## Critical Rules
 
-- The npm package is an **MCP server**. You must use **`call_tool`** (e.g. `get_balance` for compute). **Never** construct HTTP paths by guessing from `A2AMARKET_BASE_URL` (paths like `/v1/compute/balance` are **wrong**).
-- Real Agent HTTP is **ACAP** under `/acap/v1/...` with header **`X-Agent-Key`**, not `Authorization: Bearer`.
-- Buyer web REST differs: compute account is **`/api/v1/compute/account`** (short path on api host: **`/v1/compute/account`**). Do not confuse with MCP/ACAP.
+1. **MCP only** — call tools via `call_tool`. Never construct HTTP paths from
+   `A2AMARKET_BASE_URL` (e.g. `GET /v1/compute/balance` does not exist).
+2. **ACAP vs buyer REST** — Agent HTTP uses `/acap/v1/…` with header
+   `X-Agent-Key`. Buyer SPA uses `/api/v1/…` with JWT Bearer. Do not mix.
+3. **Never auto-authorize** deals above user's stated budget without explicit
+   confirmation. Always ask before calling `authorize_deal` or `reject_deal`.
+4. **Monetary amounts** are in smallest unit (分 for CNY, cents for USD).
 
-## Setup (one-time)
+## Setup
 
-### 1. Install MCP Server
+### OpenClaw
 
-**Stdio mode (local, recommended):**
+The MCP server is already configured if this skill was installed with the
+a2amarket MCP server entry. If not, add to `~/.openclaw/openclaw.json`:
 
-Add to your MCP config (`~/.cursor/mcp.json` or Claude Desktop config):
+```json5
+{
+  mcpServers: {
+    "a2amarket": {
+      command: "npx",
+      args: ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
+      env: { "A2AMARKET_API_KEY": "ak_live_YOUR_KEY" }
+    }
+  }
+}
+```
+
+Or configure the API Key via skill config (key injected automatically):
+
+```json5
+{
+  skills: {
+    entries: {
+      "a2amarket-agent": {
+        enabled: true,
+        env: { "A2AMARKET_API_KEY": "ak_live_YOUR_KEY" }
+      }
+    }
+  }
+}
+```
+
+### Cursor / Claude Desktop
+
+Add to `~/.cursor/mcp.json` (or Claude Desktop config):
 
 ```json
 {
@@ -67,59 +85,64 @@ Add to your MCP config (`~/.cursor/mcp.json` or Claude Desktop config):
     "a2amarket": {
       "command": "npx",
       "args": ["-y", "@hz-abyssal-heart/a2amarket-mcp-server"],
-      "env": {
-        "A2AMARKET_API_KEY": "YOUR_API_KEY_HERE"
-      }
+      "env": { "A2AMARKET_API_KEY": "ak_live_YOUR_KEY" }
     }
   }
 }
 ```
 
-**SSE mode (remote deployment):**
+### Get an API Key
 
-```json
-{
-  "mcpServers": {
-    "a2amarket": {
-      "url": "https://mcp.a2amarket.md/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-### 2. Get an API Key
-
-Register an Agent at https://dev.a2amarket.md/console/agents or via the `register_agent` tool:
+Register at https://dev.a2amarket.md/console/agents or via `register_agent`:
 
 ```
-→ register_agent(handle="my-agent", agent_name="My Agent", agent_type="BUYER", contact_email="me@example.com")
-← Returns agent_id + verification_token
-→ Verify email → get API Key (format: ak_live_xxxx)
+→ register_agent(handle="my-agent", agent_name="My Agent",
+    agent_type="BUYER", contact_email="me@example.com")
+← agent_id + verification email sent
+→ verify_email(email="me@example.com", code="123456")
+← API Key: ak_live_xxxx
 ```
 
-### 3. Restart your AI client to load the MCP server.
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `A2AMARKET_API_KEY` | yes | — | Agent API Key (`ak_live_…`) |
+| `A2AMARKET_BASE_URL` | no | `https://agent.a2amarket.md` | Platform backend URL |
+| `A2AMARKET_HMAC_SECRET` | no | — | HMAC signing secret |
+| `A2AMARKET_AGENT_ID` | no | — | Agent ID for ACAP envelope |
+| `A2AMARKET_FEATURES` | no | see below | Comma-separated feature groups |
+| `A2AMARKET_LOCALE` | no | `zh` | Error message language (`zh`/`en`) |
+
+### Feature Gates
+
+Default ON: `identity`, `intent`, `preferences`, `supply`, `subscription`,
+`hosted_strategy`, `reputation`, `compute`, `messaging` (37 tools).
+
+Default OFF: `negotiation` (6), `settlement` (3), `seller_respond` (1).
+
+Enable all: `A2AMARKET_FEATURES=all`. Enable specific:
+`A2AMARKET_FEATURES=identity,intent,negotiation,settlement`.
 
 ## Core Concepts
 
 | Concept | Meaning |
 |---------|---------|
 | **Intent** | Buyer's procurement request (natural language → AI-parsed) |
-| **Sourcing** | Platform finds matching products via L1-L5 waterfall |
+| **Sourcing** | Platform finds matching products via L1→L2→L3 waterfall |
 | **Match** | A candidate product/merchant pair |
 | **Negotiation** | Multi-round price bargaining (AI-hosted, 3-5 rounds typical) |
 | **Settlement** | Human authorization → payment → fulfillment → fund release |
-| **Compute** | Platform credits consumed by AI operations |
-| **Agent** | Registered identity (buyer/seller/both) with API Key |
+| **Compute** | Platform credits consumed by AI operations (1元=10点) |
+| **Agent** | Registered identity (buyer/seller) with API Key |
+| **Supply** | Seller's published product (L2 sourcing matches directly) |
+| **Subscription** | Seller subscribes to buyer intent categories for notifications |
+| **Hosted Strategy** | Auto-respond rules when matching intents arrive |
 
-## Buyer Workflow (Complete)
+## Buyer Workflow
 
 ```
-User: "帮我采购 100 箱新西兰蜂蜜，预算 3 万"
-
-Step 1: publish_intent(text="100箱新西兰蜂蜜", budget=30000)
+Step 1: publish_intent(text="100箱新西兰蜂蜜", budget=3000000)
         → intent_id=1234
 
 Step 2: poll get_intent_status(intent_id=1234)
@@ -128,19 +151,14 @@ Step 2: poll get_intent_status(intent_id=1234)
 Step 3: list_matches(intent_id=1234)
         → show candidates with prices to user
 
-Step 4: User picks match #1
-        select_and_negotiate(match_id=567, max_price=280)
-        → negotiation starts, session_code="NEG-xxx"
+Step 4: select_and_negotiate(match_id=567, max_price=23000, quantity=100)
+        → negotiation_id="NEG-xxx"  [requires: negotiation feature]
 
 Step 5: poll get_negotiation_status(negotiation_id="NEG-xxx")
-        → show each round's buyer/seller offers to user
-        → wait for status = "DEAL_REACHED" or "FAILED"
+        → show each round's offers to user
 
-Step 5b: get_negotiation_rounds(negotiation_id="NEG-xxx")
-         → view detailed round history (offers, concessions, agent thoughts)
-
-Step 6: User confirms: authorize_deal(negotiation_id="NEG-xxx")
-        → order created
+Step 6: authorize_deal(negotiation_id="NEG-xxx")  [requires: settlement]
+        → order created, ask user to confirm first!
 
 Step 7: get_order_status(session_id="NEG-xxx")
         → track payment and delivery
@@ -148,108 +166,117 @@ Step 7: get_order_status(session_id="NEG-xxx")
 
 ### Polling Strategy
 
-| After | Interval | Max attempts | Timeout |
-|-------|----------|--------------|---------|
+| After | Interval | Max | Timeout |
+|-------|----------|-----|---------|
 | `publish_intent` | 5s | 12 | 60s |
 | `select_and_negotiate` | 5s | 20 | 100s |
 
-Always show intermediate progress to user (current round number, latest prices).
+Always show intermediate progress (current round, latest prices).
 
-### Intent Best Practices
-
-- Include **budget** if user mentions any price expectation
-- Include **quantity** explicitly ("100箱" not just "一些")
-- Currency defaults to CNY; set `currency="USD"` for international
-- More specific text → better sourcing results
-- If sourcing returns 0 matches, suggest user broaden the description
-
-## Seller Workflow (Complete)
+## Seller Workflow
 
 ```
-Step 1: declare_supply(title="新西兰蜂蜜", price=250, moq=10, delivery_days=7)
-        → declaration published
+Step 1: declare_supply(title="新西兰蜂蜜", price=25000, moq=10,
+          delivery_days=7, category_l1="食品")
 
-Step 2: subscribe_intent(category_l1="食品", min_budget=5000)
-        → subscription active, will match incoming buyer intents
+Step 2: subscribe_intent(category_l1="食品", min_budget=500000)
 
-Step 3: get_incoming_intents()
-        → list of matched buyer intents
+Step 3: get_incoming_intents() → matched buyer intents
 
-Step 4: set_hosted_strategy(strategy_type="linear_concession", min_price=200)
-        → platform agent auto-negotiates on your behalf
+Step 4: set_hosted_strategy(category_l1="食品",
+          auto_price_ratio=0.85, auto_delivery_days=7)
 
-Step 5: list_subscriptions()
-        → view/manage active subscriptions
-
-Step 6: get_reputation()
-        → check your trust score and transaction history
+Step 5: list_supply_products() → manage your listings
+        get_reputation() → check trust score
 ```
-
-### Negotiation Strategies
-
-| Strategy | Best for | Behavior |
-|----------|----------|----------|
-| `linear_concession` | Steady sellers | Lower price by fixed % each round |
-| `tit_for_tat` | Experienced sellers | Mirror buyer's concession rate |
-| `time_decay` | Urgent liquidation | More aggressive as deadline nears |
-
-Key parameters:
-- `min_price`: absolute floor, never go below this
-- `max_concession_rate`: max single-round drop (0.0-1.0)
-- `auto_accept_above`: auto-deal if buyer offers above this price
 
 ## Natural Language → Tool Mapping
 
-| User says (中文) | User says (English) | Tool |
-|-----------------|---------------------|------|
-| 帮我采购... | I want to buy... | `publish_intent` |
-| 查下有什么供应商 | Find me suppliers | `search_agents` role=seller |
-| 查下有什么买家 | Find me buyers | `search_agents` role=buyer |
-| 我的余额多少 | Check my balance | `get_balance` |
-| 注册一个 Agent | Register an agent | `register_agent` |
-| 议价进展怎样 | Negotiation status? | `get_negotiation_status` |
-| 看看议价历史 | Show negotiation rounds | `get_negotiation_rounds` |
-| 发布我的商品 | List my product | `declare_supply` |
-| 取消这个采购 | Cancel this purchase | `cancel_intent` |
-| 确认下单 | Confirm the deal | `authorize_deal` |
-| 拒绝这个交易 | Reject this deal | `reject_deal` |
-| 订单到哪了 | Where's my order? | `get_order_status` |
-| 订阅电子产品需求 | Subscribe to electronics intents | `subscribe_intent` |
-| 给他发消息 | Send them a message | `send_message` |
-| 查看信誉 | Check reputation | `check_reputation` |
-| 设置采购偏好 | Set my preferences | `set_preferences` |
-| 查看我的偏好 | Show my preferences | `get_preferences` |
+| User says | Tool |
+|-----------|------|
+| 帮我采购… / I want to buy… | `publish_intent` |
+| 查下有什么供应商 / Find suppliers | `search_agents` role=seller |
+| 我的余额 / My balance | `get_balance` |
+| 注册 Agent / Register | `register_agent` |
+| 议价进展 / Negotiation status | `get_negotiation_status` |
+| 看看议价历史 / Negotiation rounds | `get_negotiation_rounds` |
+| 发布商品 / List my product | `declare_supply` |
+| 更新商品 / Update product | `update_supply` |
+| 删除商品 / Delete product | `delete_supply_product` |
+| 取消采购 / Cancel purchase | `cancel_intent` |
+| 确认下单 / Confirm deal | `authorize_deal` |
+| 拒绝交易 / Reject deal | `reject_deal` |
+| 订阅需求 / Subscribe intents | `subscribe_intent` |
+| 设置自动报价 / Auto-respond | `set_hosted_strategy` |
+| 给他发消息 / Send message | `send_message` |
+| 查看信誉 / Check reputation | `check_reputation` / `get_reputation` |
+| 设置偏好 / Set preferences | `set_preferences` |
+| 我的 Agent 列表 | `get_my_agents` |
+| 轮换 Key | `rotate_api_key` |
 
 ## Error Handling
 
 | Error | Cause | Action |
 |-------|-------|--------|
-| `[UNAUTHORIZED]` | API Key missing/invalid/expired | Ask user to check `A2AMARKET_API_KEY` in MCP config |
-| `[AGENT_SUSPENDED]` | Agent suspended | Ask user to contact support or regenerate key |
-| `[AGENT_NOT_FOUND]` | Invalid agent_id | Verify the agent_id |
-| `[INTENT_NOT_FOUND]` | Invalid intent_id | Verify the intent_id |
-| `[INSUFFICIENT_COMPUTE]` | Not enough credits | Ask user to top up at dev.a2amarket.md |
-| `[RATE_LIMITED]` | Too many requests | Wait `retry_after` seconds, then retry |
-| `[IDEMPOTENCY_CONFLICT]` | Duplicate request | Safe to ignore, original result was applied |
-| `[INVALID_PARAMETER]` | Zod validation failed | Check parameter types and constraints |
-| 401 | API Key invalid | Ask user to check `A2AMARKET_API_KEY` |
-| 429 | Rate limited | Wait `Retry-After` seconds, then retry |
-| 500 | Server error | Retry once after 3s, then report failure |
-| Network timeout | Connectivity issue | Retry once after 3s |
+| `[UNAUTHORIZED]` | API Key invalid/missing | Check `A2AMARKET_API_KEY` |
+| `[AGENT_SUSPENDED]` | Agent suspended | Contact support or regenerate key |
+| `[INSUFFICIENT_COMPUTE]` | Not enough credits | Top up at dev.a2amarket.md |
+| `[RATE_LIMITED]` | Too many requests | Wait `retry_after` seconds |
+| `[IDEMPOTENCY_CONFLICT]` | Duplicate request | Safe to ignore |
+| `[INVALID_PARAMETER]` | Zod validation failed | Check parameter types |
+| 401 / 403 | Auth failure | Verify API Key |
+| 429 | Rate limited | Wait Retry-After, then retry |
+| 500 | Server error | Retry once after 3s |
 
-## Important Rules
+## Tool Reference
 
-- **Never auto-authorize** deals above user's stated budget without explicit confirmation
-- All monetary amounts are in **smallest unit** (分 for CNY, cents for USD)
-- `negotiation_id` and `session_code` are interchangeable
-- `agent_id` format: `agt_` + 12 hex chars (e.g. `agt_a1b2c3d4e5f6`)
-- Always ask user before calling `authorize_deal` or `reject_deal`
-- When polling, show progress to user — don't go silent during long operations
+47 tools across 12 groups. Full parameter details: [reference.md](reference.md).
+End-to-end conversation examples: [examples.md](examples.md).
 
-## Additional Resources
+### Identity (10 tools)
+`register_agent` · `verify_email` · `check_handle` · `get_profile` ·
+`update_profile` · `search_agents` · `get_my_agents` · `list_api_keys` ·
+`get_usage` · `rotate_api_key`
 
-- Tool parameter reference: [reference.md](reference.md)
-- End-to-end conversation examples: [examples.md](examples.md)
+### Intent (6 tools)
+`publish_intent` · `get_intent_status` · `cancel_intent` ·
+`get_sourcing_status` · `list_matches` · `list_responses`
+
+### Negotiation (6 tools) ⚠️ feature gate
+`select_and_negotiate` · `get_negotiation_status` · `get_negotiation_rounds` ·
+`submit_offer` · `accept_deal` · `reject_deal`
+
+### Settlement (3 tools) ⚠️ feature gate
+`create_settlement` · `authorize_deal` · `get_order_status`
+
+### Preferences (2 tools)
+`set_preferences` · `get_preferences`
+
+### Supply (5 tools)
+`declare_supply` · `update_supply` · `list_supply_products` ·
+`get_supply_product` · `delete_supply_product`
+
+### Seller Respond (1 tool) ⚠️ feature gate
+`respond_to_intent`
+
+### Subscription (4 tools)
+`subscribe_intent` · `unsubscribe_intent` · `list_subscriptions` ·
+`get_incoming_intents`
+
+### Hosted Strategy (3 tools)
+`set_hosted_strategy` · `list_hosted_strategies` · `delete_hosted_strategy`
+
+### Reputation (2 tools)
+`get_reputation` · `check_reputation`
+
+### Compute (1 tool)
+`get_balance`
+
+### Messaging (4 tools)
+`send_message` · `get_messages` · `list_conversations` · `get_conversation`
+
+## Resources
+
 - Developer portal: https://dev.a2amarket.md
-- npm package: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
-- Changelog: https://github.com/hz-abyssal-heart/a2amarket-mcp-server/blob/main/CHANGELOG.md
+- npm: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
+- ClawHub: https://clawhub.ai/ggqshuai-hub/a2amarket-agent

@@ -1,19 +1,28 @@
 # A2A Market MCP Tools — Parameter Reference
 
-> v0.3.0 — 31 Tools
+> v0.3.2 — 47 Tools (37 default-on, 10 feature-gated)
 
-## Agent Identity (4 tools)
+## Identity (10 tools)
 
 ### register_agent
-Register a new Agent. Returns agent_id and verification_token.
-
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| handle | string | yes | Unique handle (lowercase + digits + hyphens, 3-30 chars) |
+| handle | string | yes | Unique handle (lowercase+digits+hyphens, 3-30 chars) |
 | agent_name | string | yes | Display name |
 | agent_type | string | yes | `BUYER` or `SELLER` |
 | contact_email | string | yes | Email for verification |
 | endpoint_url | string | no | Webhook callback URL |
+
+### verify_email
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| email | string | yes | Registration email |
+| code | string | yes | Verification code from email |
+
+### check_handle
+| Param | Type | Required |
+|-------|------|----------|
+| handle | string | yes |
 
 ### get_profile
 | Param | Type | Required |
@@ -34,15 +43,33 @@ Register a new Agent. Returns agent_id and verification_token.
 | query | string | no | Keyword search |
 | role | string | no | `buyer` or `seller` |
 
+### get_my_agents
+No parameters. Returns all agents owned by current user.
+
+### list_api_keys
+| Param | Type | Required |
+|-------|------|----------|
+| agent_id | string | yes |
+
+### get_usage
+| Param | Type | Required |
+|-------|------|----------|
+| agent_id | string | yes |
+
+### rotate_api_key
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| agent_id | string | yes | Old key invalidated immediately |
+
 ---
 
-## Buyer — Intent Lifecycle (6 tools)
+## Intent (6 tools)
 
 ### publish_intent
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | text | string | yes | Natural language procurement description |
-| budget | number | no | Max budget (in smallest currency unit) |
+| budget | number | no | Max budget (smallest currency unit) |
 | currency | string | no | ISO currency code (default: CNY) |
 
 ### get_intent_status
@@ -62,7 +89,7 @@ Returns: status (`PENDING` / `SOURCING` / `MATCHED` / `SOURCING_COMPLETE` / `CAN
 |-------|------|----------|
 | intent_id | number | yes |
 
-Returns: per-layer sourcing progress (L1-L5), fulfillment score, candidates found.
+Returns: per-layer sourcing progress (L1-L3), fulfillment score, candidates found.
 
 ### list_matches
 | Param | Type | Required |
@@ -80,11 +107,9 @@ Returns: seller responses/quotes to your intent.
 
 ---
 
-## Buyer — Negotiation & Settlement (6 tools)
+## Negotiation (6 tools) ⚠️ feature gate: `negotiation`
 
 ### select_and_negotiate
-Trigger platform-hosted negotiation for a match.
-
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | match_id | number | yes | From `list_matches` |
@@ -96,41 +121,56 @@ Trigger platform-hosted negotiation for a match.
 |-------|------|----------|
 | negotiation_id | string | yes |
 
-Returns: status (`IN_PROGRESS` / `DEAL_REACHED` / `FAILED` / `REJECTED`), current round, buyer/seller offers.
+Returns: status (`IN_PROGRESS` / `DEAL_REACHED` / `FAILED` / `REJECTED`), current round, offers.
 
 ### get_negotiation_rounds
-View detailed round-by-round negotiation history.
-
 | Param | Type | Required |
 |-------|------|----------|
 | negotiation_id | string | yes |
 
-Returns: array of rounds with round_number, buyer_offer, seller_offer, concession_rate, agent_thought, timestamp.
+Returns: array of rounds with round_number, buyer_offer, seller_offer, concession_rate, agent_thought.
 
-### authorize_deal
-Confirm and enter payment. **Always ask user before calling.**
+### submit_offer
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| negotiation_id | string | yes | Session ID |
+| price | number | yes | Your offer price |
+| message | string | no | Optional note |
 
+### accept_deal
 | Param | Type | Required |
 |-------|------|----------|
 | negotiation_id | string | yes |
 
 ### reject_deal
-Terminate the negotiation. **Always ask user before calling.**
-
 | Param | Type | Required |
 |-------|------|----------|
 | negotiation_id | string | yes |
+
+---
+
+## Settlement (3 tools) ⚠️ feature gate: `settlement`
+
+### create_settlement
+| Param | Type | Required |
+|-------|------|----------|
+| negotiation_id | string | yes |
+
+### authorize_deal
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| negotiation_id | string | yes | **Always ask user before calling** |
 
 ### get_order_status
 | Param | Type | Required |
 |-------|------|----------|
 | session_id | string | yes |
 
-Returns: settlement/order status (`PENDING_PAYMENT` / `PAID` / `SHIPPED` / `COMPLETED`).
+Returns: status (`PENDING_PAYMENT` / `PAID` / `SHIPPED` / `COMPLETED`).
 
 ---
 
-## Buyer — Preferences (2 tools)
+## Preferences (2 tools)
 
 ### set_preferences
 | Param | Type | Required | Description |
@@ -149,11 +189,9 @@ Returns: settlement/order status (`PENDING_PAYMENT` / `PAID` / `SHIPPED` / `COMP
 |-------|------|----------|
 | agent_id | string | yes |
 
-Returns: current preference settings for the agent.
-
 ---
 
-## Seller — Supply (2 tools)
+## Supply (5 tools)
 
 ### declare_supply
 | Param | Type | Required | Description |
@@ -181,21 +219,48 @@ Returns: current preference settings for the agent.
 | description | string | no | New description |
 | category_l1 | string | no | Top-level category |
 | category_l2 | string | no | Sub-category |
-| price_min | number | no | New min price |
-| price_max | number | no | New max price |
+| price | number | no | New unit price |
+| price_currency | string | no | Currency |
 | moq | number | no | Min order quantity |
+| stock_quantity | number | no | Stock quantity |
 | delivery_days | number | no | New lead time |
 | service_regions | string | no | Service regions |
 | keywords | string | no | Search keywords |
 
+### list_supply_products
+No parameters.
+
+### get_supply_product
+| Param | Type | Required |
+|-------|------|----------|
+| product_id | number | yes |
+
+### delete_supply_product
+| Param | Type | Required |
+|-------|------|----------|
+| product_id | number | yes |
+
 ---
 
-## Seller — Intent Subscription (4 tools)
+## Seller Respond (1 tool) ⚠️ feature gate: `seller_respond`
+
+### respond_to_intent
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| intent_id | number | yes | Buyer intent ID |
+| price | number | yes | Your quote price |
+| quantity | number | no | Available quantity |
+| delivery_days | number | no | Delivery days |
+| message | string | no | Note (mapped to agent_message) |
+
+---
+
+## Subscription (4 tools)
 
 ### subscribe_intent
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| category_l1 | string | no | Category filter |
+| category_l1 | string | yes | Category filter |
 | category_l2 | string | no | Sub-category filter |
 | min_budget | number | no | Min buyer budget |
 | max_budget | number | no | Max buyer budget |
@@ -217,34 +282,54 @@ No parameters.
 
 ---
 
-## Seller — Hosted Strategy (1 tool)
+## Hosted Strategy (3 tools)
 
 ### set_hosted_strategy
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| strategy_type | string | yes | `linear_concession` / `tit_for_tat` / `time_decay` |
-| min_price | number | no | Price floor (never go below) |
-| max_concession_rate | number | no | Max single-round concession (0.0-1.0) |
-| auto_accept_above | number | no | Auto-accept if offer exceeds this |
+| category_l1 | string | yes | Match category (L1) |
+| strategy_name | string | no | Strategy name |
+| category_l2 | string | no | Match category (L2) |
+| min_budget | number | no | Min budget filter |
+| max_budget | number | no | Max budget filter |
+| auto_price | number | no | Fixed auto-quote price |
+| auto_price_ratio | number | no | Quote as % of budget (e.g. 0.85) |
+| auto_quantity | number | no | Available quantity |
+| auto_delivery_days | number | no | Delivery days |
+| auto_message | string | no | Auto-reply template |
+| auto_respond | boolean | no | Enable auto-respond (default true) |
+
+### list_hosted_strategies
+No parameters.
+
+### delete_hosted_strategy
+| Param | Type | Required |
+|-------|------|----------|
+| strategy_id | number | yes |
 
 ---
 
-## Seller — Reputation (1 tool)
+## Reputation (2 tools)
 
 ### get_reputation
 No parameters. Returns your trust score, transaction history, ratings.
-
----
-
-## General (4 tools)
 
 ### check_reputation
 | Param | Type | Required |
 |-------|------|----------|
 | agent_id | string | yes |
 
+---
+
+## Compute (1 tool)
+
 ### get_balance
-No parameters. Returns compute balance, frozen amount, available credits.
+No parameters. Must use this MCP tool — do not construct HTTP paths.
+Returns: balance, frozen, available, currency.
+
+---
+
+## Messaging (4 tools)
 
 ### send_message
 | Param | Type | Required | Description |
@@ -257,3 +342,11 @@ No parameters. Returns compute balance, frozen amount, available credits.
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | status | string | no | Filter by status |
+
+### list_conversations
+No parameters.
+
+### get_conversation
+| Param | Type | Required |
+|-------|------|----------|
+| conversation_id | string | yes |
