@@ -1,6 +1,6 @@
 # A2A Market MCP Tools — Parameter Reference
 
-> v0.3.3 — 47 Tools (37 default-on, 10 feature-gated)
+> v0.3.4 — 47 Tools (37 default-on, 10 feature-gated)
 
 ## Identity (10 tools)
 
