@@ -44,49 +44,39 @@ if (argv.includes('--version') || argv.includes('-v')) {
 if (argv.includes('--help') || argv.includes('-h')) {
   console.log(`
 A2A Market MCP Server
-  ${PKG_NAME}@${VERSION} — 将 A2A Market 平台能力以 MCP（Model Context Protocol）工具形式暴露给
-  Claude / Cursor / OpenClaw 等宿主；本进程不是「对外 REST 网关」，也不提供可随意拼接的公开 API 目录。
+  ${PKG_NAME}@${VERSION} — 将 A2A Market 平台能力以 MCP Tools 形式暴露给
+  Claude / Cursor / OpenClaw 等 AI 工具。
 
 用法
   npx @hz-abyssal-heart/a2amarket-mcp-server [options]
 
-──────────────────────────────── 生产集成契约（必读）────────────────────────────────
-  1) 能力入口：仅通过 MCP 的 list_tools / call_tool 调用；禁止根据环境变量中的根地址自行构造
-     未在官方文档中列明的 HTTP 路径（常见误用：GET …/v1/compute/balance — 平台无此资源）。
-  2) 本进程出站请求：面向平台后端的 ACAP HTTP，根地址由 A2AMARKET_BASE_URL 指定；路径形如
-     /acap/v1/…，鉴权请求头为 X-Agent-Key: <API Key>。勿用 Authorization: Bearer <API Key>
-     冒充买家 JWT；二者场景不同。
-  3) 与买家 Web 前端 REST 区分：买家 SPA 算力等为 GET /api/v1/compute/account（在 api.* 主机上
-     经反向代理可能表现为 /v1/compute/account）；与上条 Agent/ACAP 不是同一套接口，勿混用。
-  4) 示例：算力余额应调用 MCP 工具 get_balance；进程内部对应 GET {BASE_URL}/acap/v1/compute/balance。
-
-──────────────────────────────── English (for host / AI runtimes) ────────────────────────
-  MCP-only integration: use call_tool; do not invent REST paths from BASE_URL.
-  Outbound: ACAP under /acap/v1/ with header X-Agent-Key. Not Bearer API keys.
+环境变量
+  A2AMARKET_API_KEY       必填。Agent API Key（格式 ak_xxx）。
+  A2AMARKET_BASE_URL      可选。平台地址（默认 https://api.a2amarket.md）。
+  A2AMARKET_HMAC_SECRET   可选。HMAC 签名密钥。
+  A2AMARKET_AGENT_ID      可选。当前 Agent ID。
+  A2AMARKET_LOCALE        可选。错误信息语言 zh|en（默认 zh）。
+  A2AMARKET_FEATURES      可选。启用的工具组，逗号分隔；all 表示全部。
+                          默认不含: negotiation, settlement, seller_respond
 
 选项
-  --stdio          Stdio 传输（默认，供本地 MCP 宿主子进程使用）
-  --sse            启动内置 HTTP Server，使用 SSE 传输（需配合 --port 或 A2AMARKET_MCP_PORT）
-  --port <n>       SSE 监听端口（默认 3100）
-  --debug          将请求与调试信息输出到 stderr（stdout 留给 MCP 协议）
-  --locale <zh|en> 工具返回错误文案语言（也可用 A2AMARKET_LOCALE）
-  -v, --version    仅打印包名与版本号
-  -h, --help       本说明
+  --sse            启用 SSE 传输模式（默认 Stdio）
+  --port <n>       SSE 端口（默认 3100）
+  --debug          输出调试日志到 stderr
+  --check          预检查：验证 API Key 和网络连通性
+  --locale <zh|en> 错误信息语言
+  -v, --version    显示版本号
+  -h, --help       显示帮助
 
-环境变量
-  A2AMARKET_API_KEY       必填。Agent API Key（ak_live_…），用于 X-Agent-Key。
-  A2AMARKET_BASE_URL      可选。本进程访问平台后端的根 URL，须可直达 /acap/v1 与 /a2a/v1（按工具需要）。
-                          默认 https://agent.a2amarket.md
-                          说明：此为 MCP 子进程出站配置，不是「给终端用户手调 REST 的文档基址」。
-  A2AMARKET_HMAC_SECRET   可选。配置后与请求体一并参与 ACAP HMAC 签名（X-ACAP-Signature）。
-  A2AMARKET_AGENT_ID      可选。写入 ACAP 信封 sender.agent_id。
-  A2AMARKET_MCP_PORT      可选。SSE 模式端口，默认 3100。
-  A2AMARKET_LOCALE        可选。zh | en，默认 zh。
-  A2AMARKET_FEATURES      可选。启用的工具组，逗号分隔；all 表示全部。
-                          组名: identity, intent, negotiation, settlement, preferences,
-                          supply, seller_respond, subscription, hosted_strategy,
-                          reputation, compute, messaging
-                          默认不含: negotiation, settlement, seller_respond
+示例
+  # Stdio 模式（本地使用）
+  A2AMARKET_API_KEY=ak_xxx npx @hz-abyssal-heart/a2amarket-mcp-server
+
+  # SSE 模式（远程使用）
+  A2AMARKET_API_KEY=ak_xxx npx @hz-abyssal-heart/a2amarket-mcp-server --sse --port 3100
+
+  # 预检查连通性
+  A2AMARKET_API_KEY=ak_xxx npx @hz-abyssal-heart/a2amarket-mcp-server --check
 `);
   process.exit(0);
 }
@@ -189,7 +179,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 通用 — Agent 身份管理 ═══
     {
       name: 'register_agent',
-      description: '注册新 Agent。通过邮箱验证后获取 API Key。',
+      description: '注册新 Agent。注册后会收到验证邮件，用 verify_email 完成激活。返回 agent_id。handle 格式：小写字母+数字+连字符，3-30 字符。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -204,7 +194,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_profile',
-      description: '查询 Agent 公开资料。',
+      description: '查询 Agent 公开资料。返回 agent_name、handle、agent_type、capabilities、endpoint_url 等。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -215,7 +205,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'update_profile',
-      description: '更新 Agent 资料（名称、端点、能力等）。',
+      description: '更新 Agent 资料。只传需要改的字段。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -229,7 +219,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'search_agents',
-      description: '搜索平台上的 Agent。可按关键词、角色过滤。',
+      description: '搜索平台上的 Agent。返回匹配的 Agent 列表（含 agent_id、handle、name、type）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -240,7 +230,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'verify_email',
-      description: '验证注册邮箱。注册后使用 agent_id 和邮件中的验证 token 完成验证，验证通过后获取 API Key。',
+      description: '验证注册邮箱，完成 Agent 激活。需要 register_agent 返回的 agent_id 和邮件中的 verification_token。验证通过后返回 API Key。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -252,7 +242,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'check_handle',
-      description: '检查 Agent handle 是否可用。',
+      description: '检查 handle 是否可用。返回 available: true/false。建议在 register_agent 前调用。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -263,12 +253,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_my_agents',
-      description: '获取当前用户拥有的所有 Agent 列表。',
+      description: '列出当前 API Key 关联的所有 Agent。返回 Agent 列表（含 agent_id、handle、name、type、status）。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'list_api_keys',
-      description: '查看指定 Agent 的 API Key 列表。',
+      description: '查看指定 Agent 的 API Key 列表。返回 key 前缀和创建时间（不返回完整 key）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -279,7 +269,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_usage',
-      description: '查看指定 Agent 的用量统计。',
+      description: '查看 Agent 的用量统计。返回 API 调用次数、算力消耗等。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -290,7 +280,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'rotate_api_key',
-      description: '轮换 Agent 的 API Key。旧 Key 立即失效。',
+      description: '轮换 API Key。旧 Key 立即失效，返回新 Key。请妥善保存新 Key。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -303,31 +293,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 买家 — 意图生命周期 ═══
     {
       name: 'publish_intent',
-      description: '发布采购意图。用自然语言描述需求，平台自动解析并寻源匹配。',
+      description: '发布采购意图。用自然语言描述你要买什么，平台自动寻源匹配。返回 intent_id。发布后用 get_intent_status 轮询进度（每 5 秒），状态变为 MATCHED 后用 list_matches 查看匹配结果。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          text: { type: 'string', description: '采购需求描述（自然语言）' },
-          budget: { type: 'number', description: '预算金额' },
-          currency: { type: 'string', description: '货币（默认 CNY）' },
+          text: { type: 'string', description: '采购需求描述，如"100箱新西兰蜂蜜，预算3万"' },
+          budget: { type: 'number', description: '预算上限（单位：分，如 3000000 = 3万元）' },
+          currency: { type: 'string', description: '货币代码，默认 CNY' },
         },
         required: ['text'],
       },
     },
     {
       name: 'get_intent_status',
-      description: '查询意图当前状态和进度。',
+      description: '查询意图状态。返回 status（PENDING/SOURCING/MATCHED/EXPIRED/CANCELLED）和 match_count。状态为 MATCHED 时用 list_matches 查看结果。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          intent_id: { type: 'number', description: '意图 ID' },
+          intent_id: { type: 'number', description: '意图 ID（publish_intent 返回）' },
         },
         required: ['intent_id'],
       },
     },
     {
       name: 'cancel_intent',
-      description: '取消一个已发布的采购意图。',
+      description: '取消采购意图。只能取消 PENDING 或 SOURCING 状态的意图。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -338,7 +328,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_sourcing_status',
-      description: '查询意图的寻源进度（L1/L2/L3 各层级状态）。',
+      description: '查询寻源进度详情。返回各层级（L1 内部/L2 平台供给/L3 外部）的匹配状态和满足度评分。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -349,7 +339,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_matches',
-      description: '查看意图匹配到的商品和商家列表。',
+      description: '查看意图匹配到的商品和商家。返回列表含 match_id、商家名称、价格、匹配度评分。选中商家后用 select_and_negotiate 开始议价。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -360,7 +350,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_responses',
-      description: '查看卖家对意图的报价响应。',
+      description: '查看卖家主动报价。返回列表含报价金额、数量、交期、卖家信息。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -373,12 +363,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 买家 — 议价与结算（平台托管模式） ═══
     {
       name: 'select_and_negotiate',
-      description: '选择匹配商家并触发平台托管议价。平台 Agent 代替你执行多轮议价。',
+      description: '选择商家开始议价。平台 Agent 自动执行多轮议价。返回 negotiation_id。用 get_negotiation_status 轮询进度，DEAL_REACHED 后用 authorize_deal 确认或 reject_deal 拒绝。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          match_id: { type: 'number', description: '匹配结果 ID' },
-          max_price: { type: 'number', description: '你能接受的最高价格' },
+          match_id: { type: 'number', description: '匹配结果 ID（list_matches 返回）' },
+          max_price: { type: 'number', description: '你能接受的最高价格（单位：分）' },
           quantity: { type: 'number', description: '采购数量' },
         },
         required: ['match_id'],
@@ -386,18 +376,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_negotiation_status',
-      description: '查询议价会话状态（含当前轮次、双方报价、进度）。',
+      description: '查询议价进度。返回 status（IN_PROGRESS/DEAL_REACHED/FAILED/REJECTED）、当前轮次、双方最新报价、agent_thought（AI 决策思路）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          negotiation_id: { type: 'string', description: '议价会话 ID' },
+          negotiation_id: { type: 'string', description: '议价会话 ID（select_and_negotiate 返回）' },
         },
         required: ['negotiation_id'],
       },
     },
     {
       name: 'get_negotiation_rounds',
-      description: '查询议价历史轮次（每轮的报价、让步、思考过程）。',
+      description: '查询议价全部轮次历史。每轮含买方报价、卖方报价、让步幅度、agent_thought。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -408,7 +398,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'authorize_deal',
-      description: '授权结算。议价达成后，确认同意该交易并进入支付流程。',
+      description: '授权交易。议价达成（DEAL_REACHED）后调用，确认同意并进入结算。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -419,7 +409,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'reject_deal',
-      description: '拒绝交易。对议价结果不满意，终止该交易。',
+      description: '拒绝交易。对议价结果不满意时调用，终止该交易。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -430,31 +420,31 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_order_status',
-      description: '查询订单/结算状态（支付、发货、完成等）。',
+      description: '查询结算/订单状态。返回 status（CREATED/PAID/SHIPPED/COMPLETED）和订单详情。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          session_id: { type: 'string', description: '订单会话 ID' },
+          session_id: { type: 'string', description: '结算会话 ID（authorize_deal 返回）' },
         },
         required: ['session_id'],
       },
     },
     {
       name: 'submit_offer',
-      description: '在议价中提交还价（手动议价模式）。',
+      description: '手动议价模式：提交还价。用于需要人工介入的议价场景。',
       inputSchema: {
         type: 'object' as const,
         properties: {
           negotiation_id: { type: 'string', description: '议价会话 ID' },
-          price: { type: 'number', description: '报价金额' },
-          message: { type: 'string', description: '附言' },
+          price: { type: 'number', description: '报价金额（单位：分）' },
+          message: { type: 'string', description: '附言（可选）' },
         },
         required: ['negotiation_id', 'price'],
       },
     },
     {
       name: 'accept_deal',
-      description: '接受当前报价，结束议价。',
+      description: '接受当前报价，结束议价进入结算。与 authorize_deal 不同：accept_deal 是在议价过程中主动接受，authorize_deal 是平台议价达成后的确认。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -465,7 +455,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'create_settlement',
-      description: '创建结算单（议价达成后）。',
+      description: '创建结算单。议价达成并授权后调用。返回 settlement_id 和支付信息。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -478,7 +468,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 买家 — 偏好设置 ═══
     {
       name: 'set_preferences',
-      description: '设置采购偏好（品类/预算/地区/质量/议价策略）。影响寻源排序和托管议价行为。',
+      description: '设置采购偏好。影响寻源排序和托管议价行为。negotiation_aggression: 0.0(保守)~1.0(激进)。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -496,7 +486,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_preferences',
-      description: '查询 Agent 的采购偏好设置。',
+      description: '查询当前采购偏好设置。返回品类、预算、地区、质量等级、议价策略等。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -506,10 +496,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ═══ 卖家 — 供给声明 ═══
+    // ═══ 卖家 — 供给管理 ═══
     {
       name: 'declare_supply',
-      description: '发布供给商品（具体商品信息，L2 寻源会直接匹配此数据）。',
+      description: '发布供给商品。买家寻源时会自动匹配你的商品。返回 product_id。title 和 price 必填，其余可选。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -517,8 +507,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           description: { type: 'string', description: '商品描述' },
           category_l1: { type: 'string', description: '一级品类' },
           category_l2: { type: 'string', description: '二级品类' },
-          price: { type: 'number', description: '单价' },
-          price_currency: { type: 'string', description: '币种（默认 CNY）' },
+          price: { type: 'number', description: '单价（单位：分）' },
+          price_currency: { type: 'string', description: '币种，默认 CNY' },
           moq: { type: 'number', description: '最小起订量' },
           stock_quantity: { type: 'number', description: '库存数量' },
           delivery_days: { type: 'number', description: '交期（天）' },
@@ -533,16 +523,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'update_supply',
-      description: '更新已有的供给商品（部分更新，只传需要改的字段）。',
+      description: '更新供给商品信息。只传需要改的字段。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          declaration_id: { type: 'number', description: '商品 ID' },
+          declaration_id: { type: 'number', description: '商品 ID（declare_supply 返回）' },
           title: { type: 'string', description: '新标题' },
           description: { type: 'string', description: '新描述' },
           category_l1: { type: 'string', description: '一级品类' },
           category_l2: { type: 'string', description: '二级品类' },
-          price: { type: 'number', description: '单价' },
+          price: { type: 'number', description: '新单价（分）' },
           price_currency: { type: 'string', description: '币种' },
           moq: { type: 'number', description: '最小起订量' },
           stock_quantity: { type: 'number', description: '库存数量' },
@@ -555,12 +545,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_supply_products',
-      description: '查看自己发布的供给商品列表。',
+      description: '列出我发布的所有供给商品。返回商品列表含 product_id、标题、价格、状态。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'get_supply_product',
-      description: '查看供给商品详情。',
+      description: '查看供给商品详情。返回完整商品信息。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -571,7 +561,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'delete_supply_product',
-      description: '删除供给商品。',
+      description: '删除供给商品。删除后不再参与寻源匹配。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -582,15 +572,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'respond_to_intent',
-      description: '卖家主动对买家意图报价响应。',
+      description: '对买家意图主动报价。买家可在 list_responses 中看到你的报价。intent_id 和 price 必填。',
       inputSchema: {
         type: 'object' as const,
         properties: {
           intent_id: { type: 'number', description: '意图 ID' },
-          price: { type: 'number', description: '报价金额' },
+          price: { type: 'number', description: '报价金额（分）' },
           quantity: { type: 'number', description: '可供数量' },
           delivery_days: { type: 'number', description: '交货天数' },
-          message: { type: 'string', description: '附言（映射为 agent_message）' },
+          message: { type: 'string', description: '报价附言' },
         },
         required: ['intent_id', 'price'],
       },
@@ -599,12 +589,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 卖家 — 意图订阅 ═══
     {
       name: 'subscribe_intent',
-      description: '订阅特定类型的买家意图。有匹配意图时会收到通知。',
+      description: '订阅特定品类的买家意图。有匹配意图时收到通知。用 get_incoming_intents 查看匹配到的意图，用 respond_to_intent 报价。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          category_l1: { type: 'string', description: '品类过滤（必填）' },
-          category_l2: { type: 'string', description: '二级品类过滤' },
+          category_l1: { type: 'string', description: '一级品类（必填）' },
+          category_l2: { type: 'string', description: '二级品类' },
           min_budget: { type: 'number', description: '最低预算过滤' },
           max_budget: { type: 'number', description: '最高预算过滤' },
           regions: { type: 'string', description: '地区过滤' },
@@ -618,19 +608,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object' as const,
         properties: {
-          subscription_id: { type: 'number', description: '订阅 ID' },
+          subscription_id: { type: 'number', description: '订阅 ID（subscribe_intent 返回）' },
         },
         required: ['subscription_id'],
       },
     },
     {
       name: 'list_subscriptions',
-      description: '查看当前所有活跃的意图订阅。',
+      description: '列出我的所有活跃订阅。返回订阅列表含 subscription_id、品类、过滤条件。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'get_incoming_intents',
-      description: '查看匹配到的买家意图（根据你的订阅条件反向匹配活跃意图）。',
+      description: '查看与我的供给匹配的买家意图。可用 respond_to_intent 对感兴趣的意图报价。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -643,17 +633,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     // ═══ 卖家 — 托管议价策略 ═══
     {
       name: 'set_hosted_strategy',
-      description: '设置托管自动响应策略。当有匹配的买家意图时，平台按此策略自动报价响应。',
+      description: '设置托管自动响应策略。有匹配意图时平台按此策略自动报价。auto_price: 固定报价（分）; auto_price_ratio: 按买家预算百分比（如 0.85 = 85%）。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          strategy_name: { type: 'string', description: '策略名称（可选）' },
+          strategy_name: { type: 'string', description: '策略名称' },
           category_l1: { type: 'string', description: '匹配品类（一级，必填）' },
-          category_l2: { type: 'string', description: '匹配品类（二级，可选）' },
+          category_l2: { type: 'string', description: '匹配品类（二级）' },
           min_budget: { type: 'number', description: '最低预算过滤' },
           max_budget: { type: 'number', description: '最高预算过滤' },
-          auto_price: { type: 'number', description: '自动报价：固定价格' },
-          auto_price_ratio: { type: 'number', description: '自动报价：按预算百分比（如 0.85 = 预算的85%）' },
+          auto_price: { type: 'number', description: '固定报价（分）' },
+          auto_price_ratio: { type: 'number', description: '按预算比例报价（0.0~1.0）' },
           auto_quantity: { type: 'number', description: '可供数量' },
           auto_delivery_days: { type: 'number', description: '交货天数' },
           auto_message: { type: 'string', description: '自动附言模板' },
@@ -664,12 +654,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_hosted_strategies',
-      description: '查看已设置的托管策略列表。',
+      description: '列出已设置的托管策略。返回策略列表含 strategy_id、品类、报价规则。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'delete_hosted_strategy',
-      description: '删除托管策略。',
+      description: '删除托管策略。删除后不再自动响应该品类的意图。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -679,17 +669,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
 
-    // ═══ 卖家 — 信誉 ═══
+    // ═══ 信誉 ═══
     {
       name: 'get_reputation',
-      description: '查看自己的信誉评分和详情。',
+      description: '查看自己的信誉评分。返回 total_score、level（BRONZE/SILVER/GOLD/PLATINUM）、正面/负面事件数。无需参数。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
 
     // ═══ 通用 — 信誉 / 算力 / 消息 ═══
     {
       name: 'check_reputation',
-      description: '查询其他 Agent 的信誉评分。',
+      description: '查询其他 Agent 的信誉评分。用于交易前评估对方可信度。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -700,14 +690,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_balance',
-      description:
-        '查询当前 Agent 关联用户的算力余额。必须通过本 MCP 工具调用；禁止根据 A2AMARKET_BASE_URL 自行 HTTP 请求。' +
-        '不存在 GET /v1/compute/balance；内部为 ACAP GET /acap/v1/compute/balance，请求头 X-Agent-Key。',
+      description: '查询算力点数余额。返回 balance（可用）、frozen（冻结中）、currency。无需参数。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'send_message',
-      description: '向其他 Agent 发送消息。',
+      description: '向其他 Agent 发送消息。receiver_agent_id 和 content 必填。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -720,22 +708,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_messages',
-      description: '查看收到的消息。',
+      description: '查看收到的消息。返回消息列表含发送者、内容、时间。',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          status: { type: 'string', description: '过滤状态（可选）' },
+          status: { type: 'string', description: '状态过滤（可选）' },
         },
       },
     },
     {
       name: 'list_conversations',
-      description: '查看消息会话列表。',
+      description: '列出消息会话。返回会话列表含对方 Agent 信息和最后消息。',
       inputSchema: { type: 'object' as const, properties: {} },
     },
     {
       name: 'get_conversation',
-      description: '查看指定会话内的消息详情。',
+      description: '查看指定会话的消息详情。返回完整消息历史。',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -1027,6 +1015,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// ── 预检查模式 ──
+
+if (argv.includes('--check')) {
+  (async () => {
+    const apiKey = process.env.A2AMARKET_API_KEY;
+    const baseUrl = process.env.A2AMARKET_BASE_URL || 'https://api.a2amarket.md';
+
+    console.log(`\n🔍 A2A Market MCP Server — 连通性预检查\n`);
+
+    // 1. 检查 API Key
+    if (!apiKey) {
+      console.log('❌ A2AMARKET_API_KEY 未设置');
+      console.log('   设置方式: export A2AMARKET_API_KEY=ak_your_key_here\n');
+      process.exit(1);
+    }
+    console.log(`✅ API Key: ${apiKey.substring(0, 10)}...`);
+    console.log(`✅ Base URL: ${baseUrl}`);
+
+    // 2. 验证 Key 有效性（调 get_balance）
+    try {
+      const resp = await fetch(`${baseUrl}/acap/v1/compute/balance`, {
+        headers: { 'X-Agent-Key': apiKey, 'Accept': 'application/json' },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const balance = data?.payload?.data?.balance ?? data?.balance ?? 'unknown';
+        console.log(`✅ API Key 有效，算力余额: ${balance}`);
+      } else if (resp.status === 401) {
+        console.log('❌ API Key 无效（401 Unauthorized）');
+        console.log('   请检查 Key 是否正确，或是否已过期\n');
+        process.exit(1);
+      } else {
+        console.log(`⚠️  服务端返回 ${resp.status}: ${resp.statusText}`);
+      }
+    } catch (err: any) {
+      console.log(`❌ 网络不通: ${err.message}`);
+      console.log(`   请检查 ${baseUrl} 是否可达\n`);
+      process.exit(1);
+    }
+
+    console.log(`\n✅ 预检查通过！MCP Server 可以正常使用。\n`);
+    process.exit(0);
+  })();
+} else {
+
 // ── 启动（Stdio / SSE 双模式） ──
 
 async function main() {
@@ -1092,3 +1125,5 @@ main().catch((err) => {
   logError('init', 'Fatal:', err);
   process.exit(1);
 });
+
+} // end of --check else block

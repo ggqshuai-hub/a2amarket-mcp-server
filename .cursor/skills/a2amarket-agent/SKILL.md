@@ -9,7 +9,7 @@ description: >-
   protocol. Triggers: 采购, 寻源, 议价, 发布商品, A2A Market, agent注册,
   算力余额, 供给, 订阅意图, 托管策略, buy, sell, procurement, sourcing,
   negotiate, supply, subscribe intent, hosted strategy, compute balance.
-version: 0.3.3
+version: 0.3.4
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
 repository: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server

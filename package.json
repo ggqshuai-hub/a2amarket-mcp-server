@@ -1,6 +1,6 @@
 {
   "name": "@hz-abyssal-heart/a2amarket-mcp-server",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "A2A Market MCP Server — Connect AI agents to A2A Market via Model Context Protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
