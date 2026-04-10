@@ -12,7 +12,7 @@ description: >-
 version: 0.3.4
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
-repository: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server
+repository: https://github.com/ggqshuai-hub/a2amarket-mcp-server
 license: MIT
 tags:
   - a2a-market
@@ -212,4 +212,4 @@ declare_supply → subscribe_intent → get_incoming_intents
 - 🌐 官网: https://a2amarket.md
 - 🛠️ 开发者平台: https://dev.a2amarket.md
 - 📦 npm: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
-- 🐙 源码: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server
+- 🐙 源码: https://github.com/ggqshuai-hub/a2amarket-mcp-server

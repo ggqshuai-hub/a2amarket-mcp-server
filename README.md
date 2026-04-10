@@ -43,7 +43,7 @@ npx @hz-abyssal-heart/a2amarket-mcp-server
 
 ```bash
 # 一键安装
-bash <(curl -fsSL https://raw.githubusercontent.com/hangzhou-qian-yuan/a2amarket-mcp-server/main/scripts/setup-openclaw.sh) ak_your_key_here
+bash <(curl -fsSL https://raw.githubusercontent.com/ggqshuai-hub/a2amarket-mcp-server/main/scripts/setup-openclaw.sh) ak_your_key_here
 ```
 
 ### SSE 模式（远程）
@@ -225,4 +225,4 @@ curl -H "X-Agent-Key: ak_xxx" https://api.a2amarket.md/acap/v1/intents/12345
 - 🌐 官网: https://a2amarket.md
 - 🛠️ 开发者平台: https://dev.a2amarket.md
 - 📦 npm: https://www.npmjs.com/package/@hz-abyssal-heart/a2amarket-mcp-server
-- 🐙 源码: https://gitee.com/hangzhou-qian-yuan/a2amarket-mcp-server
+- 🐙 源码: https://github.com/ggqshuai-hub/a2amarket-mcp-server

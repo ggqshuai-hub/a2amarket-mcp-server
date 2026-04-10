@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2026-04-10
+
+### Changed
+- 重写全部 47 个 tool 的 description：只说"做什么+参数+返回什么+下一步调什么"，删除所有内部实现细节和"禁止"指令
+- 重写 SKILL.md：友好引导（官网/开发者平台链接）+ 三步上手 + REST fallback 指南
+- 重写 README.md：删除"给 AI 必读"恐吓段落，新增完整工具表格和 REST API 章节
+- 精简 `--help` 输出：删除"生产集成契约"大段文字
+- 仓库地址从 Gitee 迁移到 GitHub
+
+### Added
+- `--check` 预检查命令：验证 API Key 有效性和网络连通性，不启动 MCP Server
+- SKILL.md 新增"如果 MCP 工具不可用"章节：REST API fallback 指南（解决国产 AI 客户端不支持 MCP 的问题）
+
+### Fixed
+- `get_balance` description 不再暴露内部 HTTP 路径（这是导致 LLM 自行拼接 REST 请求的根因）
+
+### Housekeeping
+- 删除仓库中的旧版 .tgz 打包产物
+- 测试文件移入 tests/ 目录
+- .gitignore 新增 *.tgz 规则
+
 ## [0.3.3] - 2026-04-09
 
 ### Fixed
