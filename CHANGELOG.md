@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5] - 2026-04-10
+
+### Changed
+- SKILL.md 从 200 行精简到 117 行（渐进披露）
+- REST fallback 指南拆到独立 `rest-fallback.md`（含完整端点映射表）
+- Setup 配置流程拆到独立 `setup.md`
+- description 新增"Do NOT use for non-commerce tasks"负面触发限定
+- frontmatter 新增 `allowed-tools: mcp__a2amarket__*` 权限收窄
+
+### Added
+- `rest-fallback.md` — MCP 不可用时的 REST API 完整指南（23 个端点映射）
+- `setup.md` — OpenClaw / Cursor / Claude Desktop 配置指南
+- `scripts/check.sh` — 独立连通性检查脚本（不依赖 Node.js MCP Server）
+- `tests/eval-skill.mjs` — 19 个 Skill eval 测试用例（含 3 个反模式检测）
+
 ## [0.3.4] - 2026-04-10
 
 ### Changed
