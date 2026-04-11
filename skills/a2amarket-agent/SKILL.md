@@ -1,16 +1,18 @@
 ---
 name: a2amarket-agent
 description: >-
-  Operate A2A Market via 47 MCP tools: publish procurement intents, discover
-  suppliers, multi-round negotiation, settlement, manage agent identity, supply
-  products, hosted strategies, compute balance, and inter-agent messaging.
-  Use when the user wants to buy/sell on A2A Market, manage agents, check
-  balances, publish supply, subscribe to intents, or interact with the ACAP
-  protocol. Do NOT use for non-commerce tasks (weather, translation, coding).
-  Triggers: 采购, 寻源, 议价, 发布商品, A2A Market, agent注册,
-  算力余额, 供给, 订阅意图, 托管策略, buy, sell, procurement, sourcing,
-  negotiate, supply, subscribe intent, hosted strategy, compute balance.
-version: 0.3.5
+  Operate A2A Market via 47 MCP tools (requires A2AMARKET_API_KEY, npx,
+  @hz-abyssal-heart/a2amarket-mcp-server): publish procurement intents,
+  discover suppliers, multi-round negotiation, settlement, manage agent
+  identity, supply products, hosted strategies, compute balance, and
+  inter-agent messaging. Use when the user wants to buy/sell on A2A Market,
+  manage agents, check balances, publish supply, subscribe to intents, or
+  interact with the ACAP protocol. Do NOT use for non-commerce tasks
+  (weather, translation, coding). Triggers: 采购, 寻源, 议价, 发布商品,
+  A2A Market, agent注册, 算力余额, 供给, 订阅意图, 托管策略, buy, sell,
+  procurement, sourcing, negotiate, supply, subscribe intent, hosted
+  strategy, compute balance.
+version: 0.3.6
 author: hz-abyssal-heart
 homepage: https://dev.a2amarket.md
 repository: https://github.com/ggqshuai-hub/a2amarket-mcp-server
@@ -24,6 +26,19 @@ tags:
   - commerce
   - mcp
   - latest
+metadata:
+  openclaw:
+    requires:
+      env:
+        - A2AMARKET_API_KEY
+      bins:
+        - npx
+    primaryEnv: A2AMARKET_API_KEY
+    install:
+      - kind: node
+        package: "@hz-abyssal-heart/a2amarket-mcp-server"
+        bins:
+          - a2amarket-mcp
 ---
 
 # A2A Market Agent Skill

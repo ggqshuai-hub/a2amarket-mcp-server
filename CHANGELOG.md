@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-04-11
+
+### Fixed
+- SKILL.md frontmatter 补充 `metadata.openclaw` 块，解决 ClawHub 安全扫描器 "Suspicious" 告警
+  - 新增 `requires.env: [A2AMARKET_API_KEY]` — 声明必需环境变量
+  - 新增 `primaryEnv: A2AMARKET_API_KEY` — 标记主凭证
+  - 新增 `requires.bins: [npx]` — 声明运行时依赖
+  - 新增 `install: [{kind: node, package: @hz-abyssal-heart/a2amarket-mcp-server}]` — 声明 npm 安装规范
+- description 开头补充凭证和依赖声明（扫描器信任 description 摘要作为 registry 级别声明）
+
 ## [0.3.5] - 2026-04-10
 
 ### Changed
